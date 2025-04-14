@@ -24,6 +24,8 @@ add_library(res-cpp INTERFACE include/res-cpp/res-cpp.h
         include/res-cpp/result_storage.h
         include/res-cpp/result_error_base.h
         include/res-cpp/result_error.h
+        include/res-cpp/try.h
+        include/res-cpp/result_base.h
 )
 target_link_libraries(res-cpp INTERFACE
         fmt::fmt

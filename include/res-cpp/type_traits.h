@@ -25,7 +25,6 @@ template <typename T>
 using make_const_t = typename detail::make_const<T>::type;
 
 template <typename T>
-    requires (!std::is_rvalue_reference_v<T>)
 using make_lvalue_reference_t = std::remove_reference_t<T>&;
 
 }

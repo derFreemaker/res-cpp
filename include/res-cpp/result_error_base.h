@@ -7,7 +7,7 @@
 #include "res-cpp/tags.h"
 
 namespace ResCpp {
-template <typename T>
+template <typename T, typename ErrorT>
 struct Result;
 
 template <typename DerivedT>
@@ -29,8 +29,8 @@ struct ResultErrorBase {
     }
 
     template <typename T>
-    operator Result<T>() const noexcept {
-        return Result<T>(detail::Error, *this);
+    operator Result<T, DerivedT>() const noexcept {
+        return Result<T, DerivedT>(detail::ErrorTag{}, *this);
     }
 };
 }
