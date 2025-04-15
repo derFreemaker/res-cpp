@@ -118,8 +118,9 @@ struct Result<void, ErrorT> : detail::ResultBase<void, ErrorT> {
         detail::ResultBase<void, ErrorT>(detail::Error, error) {
     };
 
-    template <typename... Args, class = std::enable_if_t<std::is_constructible_v<ErrorT, Args...>>>
-    Result(detail::ErrorTag, Args&&... args) noexcept :
+    template <typename... Args>
+    Result(detail::ErrorTag, Args&&... args) noexcept
+        requires (std::is_constructible_v<ErrorT, Args...>) :
         Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {
     }
 
