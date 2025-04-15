@@ -49,8 +49,8 @@ struct Result : detail::ResultBase<ErrorT> {
         new(&ResultStorage<StoringT>()) StoringT(static_cast<T>(std::forward<T2>(value)));
     }
 
-    ReturnT Value() & {
-        if (this->HasError()) {
+    ReturnT value() & {
+        if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
         if constexpr (std::is_reference_v<T>) {
@@ -61,8 +61,8 @@ struct Result : detail::ResultBase<ErrorT> {
         }
     }
 
-    make_const_t<ReturnT> Value() const & {
-        if (this->HasError()) {
+    make_const_t<ReturnT> value() const & {
+        if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
         if constexpr (std::is_reference_v<T>) {
@@ -73,8 +73,8 @@ struct Result : detail::ResultBase<ErrorT> {
         }
     }
 
-    ReturnT Value() && {
-        if (this->HasError()) {
+    ReturnT value() && {
+        if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
         if constexpr (std::is_reference_v<T>) {
@@ -85,8 +85,8 @@ struct Result : detail::ResultBase<ErrorT> {
         }
     }
 
-    make_const_t<ReturnT> Value() const && {
-        if (this->HasError()) {
+    make_const_t<ReturnT> value() const && {
+        if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
         if constexpr (std::is_reference_v<T>) {

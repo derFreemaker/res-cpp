@@ -15,7 +15,7 @@ TEST(Result, TRY) {
 
     const auto resultTestErrorPropagation = testErrorPropagation();
 
-    EXPECT_EQ(resultTestErrorPropagation.Error().str(), "some error: 893745");
+    EXPECT_EQ(resultTestErrorPropagation.error().str(), "some error: 893745");
 }
 
 //TODO: add more tests

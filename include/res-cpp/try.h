@@ -32,8 +32,8 @@ typename Result<T, ErrorT>::ReturnT TryHelper(const Result<T, ErrorT>*) noexcept
     }
 }
 
-template <typename T, typename ErrorT>
 struct PassErrorHelper {
+    template <typename T, typename ErrorT>
     operator Result<T, ErrorT>() const noexcept {
         return Result<T, ErrorT>(PassErrorTag<ErrorT>{});
     }
@@ -47,7 +47,7 @@ struct PassErrorHelper {
     (::ResCpp::detail::TryHelper( \
         ({ \
             auto __result__ = (expr); \
-            if (__result__.HasError()) { \
+            if (__result__.has_error()) { \
                 __VA_ARGS__ \
             } \
             &__result__; \
@@ -55,6 +55,6 @@ struct PassErrorHelper {
     ))
 
 #define TRY(...) \
-    TRY_IMPL((__VA_ARGS__), return __result__.Error();)
+    TRY_IMPL((__VA_ARGS__), return ::ResCpp::detail::PassErrorHelper{};)
 
 #endif //RESCPP_TRY_H

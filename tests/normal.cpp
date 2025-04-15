@@ -10,8 +10,8 @@ TEST(Result, Error) {
 
     const auto resultTestError = testError();
 
-    EXPECT_TRUE(resultTestError.HasError());
-    EXPECT_EQ(resultTestError.Error().str(), "some error: 2345");
+    EXPECT_TRUE(resultTestError.has_error());
+    EXPECT_EQ(resultTestError.error().str(), "some error: 2345");
 }
 
 TEST(Result, Void) {
@@ -21,7 +21,7 @@ TEST(Result, Void) {
 
     const auto resultTestSuccess = testSuccess();
 
-    EXPECT_FALSE(resultTestSuccess.HasError());
+    EXPECT_FALSE(resultTestSuccess.has_error());
 }
 
 TEST(Result, Value) {
@@ -33,7 +33,7 @@ TEST(Result, Value) {
 
     const auto resultValue = testValue();
 
-    EXPECT_EQ(resultValue.Value(), 123);
+    EXPECT_EQ(resultValue.value(), 123);
 }
 
 TEST(Result, LValueReference) {
@@ -44,7 +44,7 @@ TEST(Result, LValueReference) {
 
     const auto resultReference = testReference();
 
-    EXPECT_EQ(resultReference.Value(), testInt);
+    EXPECT_EQ(resultReference.value(), testInt);
 }
 
 TEST(Result, ConstLValueReference) {
@@ -55,7 +55,7 @@ TEST(Result, ConstLValueReference) {
 
     const auto resultReference = testReference();
 
-    EXPECT_EQ(resultReference.Value(), testInt);
+    EXPECT_EQ(resultReference.value(), testInt);
 }
 
 TEST(Result, RValueReference) {
@@ -64,7 +64,7 @@ TEST(Result, RValueReference) {
         return std::move(testInt);
     };
 
-    EXPECT_EQ(testReference().Value(), testInt);
+    EXPECT_EQ(testReference().value(), testInt);
 }
 
 TEST(Result, ConstRValueReference) {
@@ -73,7 +73,7 @@ TEST(Result, ConstRValueReference) {
         return std::move(testInt);
     };
 
-    EXPECT_EQ(testReference().Value(), testInt);
+    EXPECT_EQ(testReference().value(), testInt);
 }
 
 TEST(Result, Pointer) {
@@ -85,7 +85,7 @@ TEST(Result, Pointer) {
 
     const auto resultReference = testReference();
 
-    EXPECT_EQ(resultReference.Value(), &testInt);
+    EXPECT_EQ(resultReference.value(), &testInt);
 }
 
 TEST(Result, ConstPointer) {
@@ -97,7 +97,7 @@ TEST(Result, ConstPointer) {
 
     const auto resultReference = testReference();
 
-    EXPECT_EQ(resultReference.Value(), &testInt);
+    EXPECT_EQ(resultReference.value(), &testInt);
 }
 
 TEST(Result, Convertion) {
@@ -109,6 +109,6 @@ TEST(Result, Convertion) {
 
     const auto resultConvertion = testConvertion();
 
-    EXPECT_EQ(resultConvertion.Value(), static_cast<int>(testFloat));
+    EXPECT_EQ(resultConvertion.value(), static_cast<int>(testFloat));
 }
 }

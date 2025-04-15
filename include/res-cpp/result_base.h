@@ -24,12 +24,16 @@ struct ResultBase {
     ResultBase(PassErrorTag<ErrorT>) noexcept {}
 
     [[nodiscard]]
-    bool HasError() const noexcept {
+    bool has_error() const noexcept {
         return ResultErrorStorage<ErrorT>().has_value();
     }
 
     [[nodiscard]]
-    const ErrorT& Error() const noexcept {
+    const ErrorT& error() const {
+        if (!has_error()) {
+            throw std::logic_error("Attempted to access error of an success Result.");
+        }
+        
         return ResultErrorStorage<ErrorT>().value();
     }
 };
