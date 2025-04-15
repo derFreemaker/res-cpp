@@ -6,7 +6,7 @@
 #include "res-cpp/result_storage.h"
 
 namespace ResCpp::detail {
-template <typename ErrorT = FormattedError>
+template <typename T, typename ErrorT = FormattedError>
     requires (!std::is_reference_v<ErrorT> && !std::is_pointer_v<ErrorT>) //TODO: improve with concept for better errors
 struct ResultBase {
     ResultBase(OkTag) noexcept {
@@ -36,6 +36,10 @@ struct ResultBase {
         
         return ResultErrorStorage<ErrorT>().value();
     }
+
+    // const ResultHolder<T, ErrorT> hold() const noexcept {
+    //     
+    // }
 };
 }
 

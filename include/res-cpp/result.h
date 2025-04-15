@@ -15,8 +15,14 @@ void ThrowBadValueAccessException() {
 }
 }
 
+/// This is a none holdable type in other words.
+/// 'Result<...>' type itself is just for type information.
+/// Since everything is stored in static thread_local variables.
+/// In order to keep the Result information you have to call '.hold()'.
+/// This will copy the result data from the static thread_local variables to a
+/// 'ResultHolder<...>' type struct.
 template <typename T, typename ErrorT = ResultError>
-struct Result : detail::ResultBase<ErrorT> {
+struct Result : detail::ResultBase<T, ErrorT> {
     using StoringT = std::conditional_t<std::is_reference_v<T>,
                                         ReferenceWrapper<T>,
                                         T>;
@@ -99,7 +105,7 @@ struct Result : detail::ResultBase<ErrorT> {
 };
 
 template <typename ErrorT>
-struct Result<void, ErrorT> : detail::ResultBase<ErrorT> {
+struct Result<void, ErrorT> : detail::ResultBase<void, ErrorT> {
     Result(detail::ErrorTag, ErrorT&& error) noexcept
         : detail::ResultBase<ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
 
