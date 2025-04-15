@@ -37,13 +37,15 @@ struct Result : detail::ResultBase<ErrorT> {
     Result(detail::PassErrorTag<ErrorT>) noexcept
         : detail::ResultBase<ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
 
-    Result(T&& value) noexcept : detail::ResultBase<ErrorT>(detail::Ok) {
+    Result(T&& value) noexcept
+        : detail::ResultBase<ErrorT>(detail::Ok) {
         new(&ResultStorage<StoringT>()) StoringT(static_cast<T>(value));
     }
 
     template <typename T2>
         requires (!std::is_same_v<T2, T> && std::is_nothrow_convertible_v<T2, T>)
-    Result(T2&& value) noexcept : detail::ResultBase<ErrorT>(detail::Ok) {
+    Result(T2&& value) noexcept
+        : detail::ResultBase<ErrorT>(detail::Ok) {
         new(&ResultStorage<StoringT>()) StoringT(static_cast<T>(std::forward<T2>(value)));
     }
 
@@ -110,7 +112,7 @@ struct Result<void, ErrorT> : detail::ResultBase<ErrorT> {
 
     Result(detail::PassErrorTag<ErrorT>) noexcept
         : detail::ResultBase<ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
-    
+
     Result() noexcept : detail::ResultBase<ErrorT>(detail::Ok) {
         ResultErrorStorage<ErrorT>() = std::nullopt;
     }

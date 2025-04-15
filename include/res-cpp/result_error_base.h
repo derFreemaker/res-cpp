@@ -30,7 +30,7 @@ struct ResultErrorBase {
 
     template <typename T>
     operator Result<T, DerivedT>() const noexcept {
-        return Result<T, DerivedT>(detail::ErrorTag{}, *this);
+        return Result<T, DerivedT>(detail::Error, *this);
     }
 };
 }

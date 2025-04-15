@@ -12,7 +12,10 @@ template <typename T>
     requires (std::is_base_of_v<ResultErrorBase<T>, T>)
 std::optional<T>& ResultErrorStorage() {
     using StoringT = std::optional<T>;
-    static thread_local std::aligned_storage<sizeof(StoringT), alignof(StoringT)> storage;
+    struct alignas(StoringT) storage_type {
+        std::byte _[sizeof(StoringT)];
+    };
+    static thread_local storage_type storage;
     return *reinterpret_cast<StoringT*>(&storage);
 }
 
@@ -20,7 +23,10 @@ template <typename T>
     requires (!std::is_base_of_v<ResultErrorBase<T>, T>
         && !std::is_reference_v<T>)
 T& ResultStorage() {
-    static thread_local std::aligned_storage<sizeof(T), alignof(T)> storage;
+    struct alignas(T) storage_type {
+        std::byte _[sizeof(T)];
+    };
+    static thread_local storage_type storage;
     return *reinterpret_cast<T*>(&storage);
 }
 }
