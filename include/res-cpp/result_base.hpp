@@ -1,12 +1,13 @@
 #ifndef RESCPP_RESULT_BASE_H
 #define RESCPP_RESULT_BASE_H
 
+#include "res-cpp/exceptions.hpp"
 #include "res-cpp/tags.hpp"
 #include "res-cpp/result_error.hpp"
 #include "res-cpp/result_storage.hpp"
 
 namespace ResCpp::detail {
-template <typename T, typename ErrorT = FormattedError>
+template <typename ErrorT = FormattedError>
     requires (!std::is_reference_v<ErrorT> && !std::is_pointer_v<ErrorT>) //TODO: improve with concept for better errors
 struct ResultBase {
     ResultBase(OkTag) noexcept {
@@ -31,14 +32,10 @@ struct ResultBase {
     [[nodiscard]]
     const ErrorT& error() const {
         if (!has_error()) {
-            throw std::logic_error("Attempted to access error of an success Result.");
+            ThrowBadErrorAccessException();
         }
         return ResultErrorStorage<ErrorT>().value();
     }
-
-    // const ResultHolder<T, ErrorT> hold() const noexcept {
-    //     
-    // }
 };
 }
 

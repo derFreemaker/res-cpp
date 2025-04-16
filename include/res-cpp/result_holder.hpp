@@ -1,21 +1,17 @@
 #ifndef RESCPP_RESULT_HOLDER_HPP
 #define RESCPP_RESULT_HOLDER_HPP
 
+#include "res-cpp/type_traits.hpp"
 #include "res-cpp/result.hpp"
 
 namespace ResCpp {
 
-template <typename StoredT, typename ErrorT>
+template <typename ResultT>
 struct ResultHolder {
-    using StoredT = StoredT;
-    using ErrorT = ErrorT;
-
-    using StoringT = std::conditional_t<std::is_reference_v<StoredT>,
-                                        ReferenceWrapper<StoredT>,
-                                        StoredT>;
-    using ReturnT = std::conditional_t<std::is_reference_v<StoredT>,
-                                       StoredT,
-                                       make_lvalue_reference_t<StoredT>>;
+    using StoredT = typename ResultT::StoredT;
+    using ErrorT = typename ResultT::ErrorT;
+    using StoringT = typename ResultT::StoringT;
+    using ReturnT = typename ResultT::ReturnT;
 
 private:
     union {
@@ -26,14 +22,22 @@ private:
     bool has_error_;
 
 public:
-    ResultHolder(StoringT&& value) :
-        value_(std::forward<StoringT>(value)),
-        has_error_(false) {}
+    ResultHolder(const ResultT& result) noexcept {
+        has_error_ = result.has_error();
+        if (has_error_) {
+            std::memcpy(&error_, &ResultErrorStorage<ErrorT>(), sizeof(ErrorT));
+        }
+        else {
+            std::memcpy(&value_, &ResultStorage<StoringT>(), sizeof(StoringT));
+        }
+    }
 
-    ResultHolder(ErrorT&& error) :
-        error_(std::forward<ErrorT>(error)),
-        has_error_(true) {}
-
+    ~ResultHolder() noexcept {
+        if (!has_error_) {
+            value_.StoringT::~StoringT();
+        }
+    }
+    
     [[nodiscard]]
     bool has_error() const noexcept {
         return has_error_;
@@ -42,7 +46,7 @@ public:
     [[nodiscard]]
     const ErrorT& error() const {
         if (!has_error()) {
-            throw std::logic_error("Attempted to access error of an success Result.");
+            detail::ThrowBadErrorAccessException();
         }
         return error_;
     }
@@ -100,25 +104,28 @@ public:
             return Result<StoredT, ErrorT>(error_);
         }
         if constexpr (std::is_reference_v<StoredT>) {
-            return Result<StoredT, ErrorT>(std::forward<StoredT>(value_.get()));
+            return Result<StoredT, ErrorT>(value_.get());
         }
         else {
-            return Result<StoredT, ErrorT>(std::forward<StoringT>(value_));
+            return Result<StoredT, ErrorT>(value_);
         }
     }
 };
 
 template <typename ErrorT>
-struct ResultHolder<void, ErrorT> {
+struct ResultHolder<Result<void, ErrorT>> {
     using ErrorT = ErrorT;
 
 private:
     std::optional<ErrorT> error_;
 
 public:
-    ResultHolder(ErrorT&& error) :
-        error_(std::forward<ErrorT>(error)) {}
-
+    ResultHolder(const Result<void, ErrorT>& result) {
+        if (result.has_error()) {
+            error_ = result.error();
+        }
+    }
+    
     [[nodiscard]]
     bool has_error() const noexcept {
         return error_.has_value();

@@ -8,12 +8,8 @@
 #include "res-cpp/result_storage.hpp"
 
 namespace ResCpp {
-namespace detail {
-template <typename ErrorT>
-void ThrowBadValueAccessException() {
-    throw std::runtime_error("Attempted to access value of an error Result. Error: " + ResultErrorStorage<ErrorT>().value().str());
-}
-}
+template <typename ResultT>
+struct ResultHolder;
 
 /// This is a none holdable type in other words.
 /// 'Result<...>' type itself is just for type information.
@@ -21,45 +17,53 @@ void ThrowBadValueAccessException() {
 /// In order to keep the Result information you have to call '.hold()'.
 /// This will copy the result data from the static thread_local variables to a
 /// 'ResultHolder<...>' type struct.
-template <typename T, typename ErrorT = ResultError>
-struct Result : detail::ResultBase<T, ErrorT> {
-    using StoringT = std::conditional_t<std::is_reference_v<T>,
-                                        ReferenceWrapper<T>,
-                                        T>;
-    using ReturnT = std::conditional_t<std::is_reference_v<T>,
-                                       T,
-                                       make_lvalue_reference_t<T>>;
+template <typename StoredT, typename ErrorT = ResultError>
+struct Result : detail::ResultBase<ErrorT> {
+    using ErrorT = ErrorT;
+
+    using StoredT = StoredT;
+    using StoringT = std::conditional_t<std::is_reference_v<StoredT>,
+                                        ReferenceWrapper<StoredT>,
+                                        StoredT>;
+    using ReturnT = std::conditional_t<std::is_reference_v<StoredT>,
+                                       StoredT,
+                                       make_lvalue_reference_t<StoredT>>;
 
     Result(detail::ErrorTag, ErrorT&& error) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
+        detail::ResultBase<ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
 
     Result(detail::ErrorTag, const ErrorT& error) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::Error, error) {};
+        detail::ResultBase<ErrorT>(detail::Error, error) {};
 
     template <typename... Args, class = std::enable_if_t<std::is_constructible_v<ErrorT, Args...>>>
     Result(detail::ErrorTag, Args&&... args) noexcept :
         Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {}
 
     Result(detail::PassErrorTag<ErrorT>) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
+        detail::ResultBase<ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
 
-    Result(T&& value) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::Ok) {
-        new(&ResultStorage<StoringT>()) StoringT(static_cast<T>(value));
+    Result(StoredT&& value) noexcept :
+        detail::ResultBase<ErrorT>(detail::Ok) {
+        if constexpr (std::is_reference_v<StoredT>) {
+            new(&ResultStorage<StoringT>()) StoringT(static_cast<StoredT>(value));
+        }
+        else {
+            new(&ResultStorage<StoringT>()) StoredT(std::forward<StoredT>(value));
+        }
     }
 
     template <typename T2>
-        requires (!std::is_same_v<T2, T> && std::is_nothrow_convertible_v<T2, T>)
+        requires (!std::is_same_v<T2, StoredT> && std::is_nothrow_convertible_v<T2, StoredT>)
     Result(T2&& value) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::Ok) {
-        new(&ResultStorage<StoringT>()) StoringT(static_cast<T>(std::forward<T2>(value)));
+        detail::ResultBase<ErrorT>(detail::Ok) {
+        new(&ResultStorage<StoringT>()) StoringT(static_cast<StoredT>(std::forward<T2>(value)));
     }
 
     ReturnT value() & {
         if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
-        if constexpr (std::is_reference_v<T>) {
+        if constexpr (std::is_reference_v<StoredT>) {
             return ResultStorage<StoringT>().get();
         }
         else {
@@ -71,7 +75,7 @@ struct Result : detail::ResultBase<T, ErrorT> {
         if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
-        if constexpr (std::is_reference_v<T>) {
+        if constexpr (std::is_reference_v<StoredT>) {
             return ResultStorage<StoringT>().get();
         }
         else {
@@ -83,7 +87,7 @@ struct Result : detail::ResultBase<T, ErrorT> {
         if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
-        if constexpr (std::is_reference_v<T>) {
+        if constexpr (std::is_reference_v<StoredT>) {
             return ResultStorage<StoringT>().get();
         }
         else {
@@ -95,22 +99,28 @@ struct Result : detail::ResultBase<T, ErrorT> {
         if (this->has_error()) {
             detail::ThrowBadValueAccessException<ErrorT>();
         }
-        if constexpr (std::is_reference_v<T>) {
+        if constexpr (std::is_reference_v<StoredT>) {
             return ResultStorage<StoringT>().get();
         }
         else {
             return ResultStorage<StoringT>();
         }
     }
+
+    ResultHolder<Result> hold() const noexcept {
+        return ResultHolder<Result>(*this);
+    }
 };
 
 template <typename ErrorT>
-struct Result<void, ErrorT> : detail::ResultBase<void, ErrorT> {
+struct Result<void, ErrorT> : detail::ResultBase<ErrorT> {
+    using ErrorT = ErrorT;
+
     Result(detail::ErrorTag, ErrorT&& error) noexcept :
-        detail::ResultBase<void, ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
+        detail::ResultBase<ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
 
     Result(detail::ErrorTag, const ErrorT& error) noexcept :
-        detail::ResultBase<void, ErrorT>(detail::Error, error) {};
+        detail::ResultBase<ErrorT>(detail::Error, error) {};
 
     template <typename... Args>
     Result(detail::ErrorTag, Args&&... args) noexcept
@@ -118,11 +128,15 @@ struct Result<void, ErrorT> : detail::ResultBase<void, ErrorT> {
         Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {}
 
     Result(detail::PassErrorTag<ErrorT>) noexcept :
-        detail::ResultBase<void, ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
+        detail::ResultBase<ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
 
     Result() noexcept :
-        detail::ResultBase<void, ErrorT>(detail::Ok) {
+        detail::ResultBase<ErrorT>(detail::Ok) {
         ResultErrorStorage<ErrorT>() = std::nullopt;
+    }
+
+    ResultHolder<Result> hold() const noexcept {
+        return ResultHolder<Result>(*this);
     }
 };
 }
