@@ -1,8 +1,8 @@
 #ifndef RESCPP_RESULT_ERROR_H
 #define RESCPP_RESULT_ERROR_H
 
-#include "res-cpp/result_error_base.h"
-#include "res-cpp/formatted_error.h"
+#include "res-cpp/result_error_base.hpp"
+#include "res-cpp/formatted_error.hpp"
 
 #if defined(RESCPP_RESULT_ERROR) && !defined(RESCPP_RESULT_ERROR_HEADER)
 #error "RESCPP_RESULT_ERROR_HEADER also needs to be defined"

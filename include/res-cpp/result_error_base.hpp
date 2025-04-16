@@ -4,7 +4,7 @@
 #include <ostream>
 #include <string>
 
-#include "res-cpp/tags.h"
+#include "res-cpp/tags.hpp"
 
 namespace ResCpp {
 template <typename T, typename ErrorT>

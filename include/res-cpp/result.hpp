@@ -1,11 +1,11 @@
 #ifndef RESCPP_RESULT_H
 #define RESCPP_RESULT_H
 
-#include "res-cpp/reference_wrapper.h"
-#include "res-cpp/result_base.h"
-#include "res-cpp/type_traits.h"
-#include "res-cpp/result_error.h"
-#include "res-cpp/result_storage.h"
+#include "res-cpp/reference_wrapper.hpp"
+#include "res-cpp/result_base.hpp"
+#include "res-cpp/type_traits.hpp"
+#include "res-cpp/result_error.hpp"
+#include "res-cpp/result_storage.hpp"
 
 namespace ResCpp {
 namespace detail {
@@ -31,21 +31,17 @@ struct Result : detail::ResultBase<T, ErrorT> {
                                        make_lvalue_reference_t<T>>;
 
     Result(detail::ErrorTag, ErrorT&& error) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::Error, std::forward<ErrorT>(error)) {
-    }
+        detail::ResultBase<T, ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
 
     Result(detail::ErrorTag, const ErrorT& error) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::Error, error) {
-    };
+        detail::ResultBase<T, ErrorT>(detail::Error, error) {};
 
     template <typename... Args, class = std::enable_if_t<std::is_constructible_v<ErrorT, Args...>>>
     Result(detail::ErrorTag, Args&&... args) noexcept :
-        Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {
-    }
+        Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {}
 
     Result(detail::PassErrorTag<ErrorT>) noexcept :
-        detail::ResultBase<T, ErrorT>(detail::PassErrorTag<ErrorT>{}) {
-    }
+        detail::ResultBase<T, ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
 
     Result(T&& value) noexcept :
         detail::ResultBase<T, ErrorT>(detail::Ok) {
@@ -111,22 +107,18 @@ struct Result : detail::ResultBase<T, ErrorT> {
 template <typename ErrorT>
 struct Result<void, ErrorT> : detail::ResultBase<void, ErrorT> {
     Result(detail::ErrorTag, ErrorT&& error) noexcept :
-        detail::ResultBase<void, ErrorT>(detail::Error, std::forward<ErrorT>(error)) {
-    }
+        detail::ResultBase<void, ErrorT>(detail::Error, std::forward<ErrorT>(error)) {}
 
     Result(detail::ErrorTag, const ErrorT& error) noexcept :
-        detail::ResultBase<void, ErrorT>(detail::Error, error) {
-    };
+        detail::ResultBase<void, ErrorT>(detail::Error, error) {};
 
     template <typename... Args>
     Result(detail::ErrorTag, Args&&... args) noexcept
         requires (std::is_constructible_v<ErrorT, Args...>) :
-        Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {
-    }
+        Result(detail::Error, ErrorT(std::forward<Args>(args)...)) {}
 
     Result(detail::PassErrorTag<ErrorT>) noexcept :
-        detail::ResultBase<void, ErrorT>(detail::PassErrorTag<ErrorT>{}) {
-    }
+        detail::ResultBase<void, ErrorT>(detail::PassErrorTag<ErrorT>{}) {}
 
     Result() noexcept :
         detail::ResultBase<void, ErrorT>(detail::Ok) {

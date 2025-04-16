@@ -4,7 +4,7 @@
 #include <optional>
 #include <type_traits>
 
-#include "res-cpp/result_error.h"
+#include "res-cpp/result_error.hpp"
 
 
 namespace ResCpp {

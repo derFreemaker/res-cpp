@@ -15,6 +15,7 @@ CPMAddPackage(
 add_executable(res-cpp_tests
         normal.cpp
         try.cpp
+        hold.cpp
 )
 target_link_libraries(res-cpp_tests PUBLIC
         gtest

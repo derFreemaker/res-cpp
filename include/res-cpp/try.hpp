@@ -1,7 +1,7 @@
 #ifndef RESCPP_TRY_H
 #define RESCPP_TRY_H
 
-#include "res-cpp/result.h"
+#include "res-cpp/result.hpp"
 
 namespace ResCpp::detail {
 template <typename ErrorT>

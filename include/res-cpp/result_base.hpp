@@ -1,9 +1,9 @@
 #ifndef RESCPP_RESULT_BASE_H
 #define RESCPP_RESULT_BASE_H
 
-#include "res-cpp/tags.h"
-#include "res-cpp/result_error.h"
-#include "res-cpp/result_storage.h"
+#include "res-cpp/tags.hpp"
+#include "res-cpp/result_error.hpp"
+#include "res-cpp/result_storage.hpp"
 
 namespace ResCpp::detail {
 template <typename T, typename ErrorT = FormattedError>
@@ -20,7 +20,7 @@ struct ResultBase {
     ResultBase(ErrorTag, const ErrorT& error) noexcept {
         ResultErrorStorage<ErrorT>() = std::forward<ErrorT>(error);
     }
-    
+
     ResultBase(PassErrorTag<ErrorT>) noexcept {}
 
     [[nodiscard]]
@@ -33,7 +33,6 @@ struct ResultBase {
         if (!has_error()) {
             throw std::logic_error("Attempted to access error of an success Result.");
         }
-        
         return ResultErrorStorage<ErrorT>().value();
     }
 

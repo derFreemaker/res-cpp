@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "res-cpp/res-cpp.h"
+#include "res-cpp/res-cpp.hpp"
 
 namespace ResCpp {
 TEST(Result, TRY) {

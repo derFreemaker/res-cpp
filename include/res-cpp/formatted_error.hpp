@@ -5,7 +5,7 @@
 #include <exception>
 #include <fmt/format.h>
 
-#include "res-cpp/result_error_base.h"
+#include "res-cpp/result_error_base.hpp"
 
 namespace ResCpp {
 struct FormattedError : ResultErrorBase<FormattedError> {
