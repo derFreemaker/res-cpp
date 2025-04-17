@@ -48,7 +48,7 @@ struct Result : detail::ResultBase<ErrorT> {
             new(&ResultStorage<StoringT>()) StoringT(static_cast<StoredT>(value));
         }
         else {
-            new(&ResultStorage<StoringT>()) StoredT(std::forward<StoredT>(value));
+            std::memcpy(&ResultStorage<StoringT>(), &value, sizeof(StoringT));
         }
     }
 

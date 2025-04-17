@@ -3,7 +3,10 @@
 
 #include "res-cpp/res-cpp.hpp"
 
-namespace ResCpp {
+#include "common.hpp"
+#include "tracking_struct.hpp"
+
+namespace ResCpp::testing {
 TEST(Result, Error) {
     auto testError = []() -> Result<void> {
         return { RESULT_ERROR(), "some error: {0}", 2345 };
@@ -26,15 +29,20 @@ TEST(Result, Void) {
 }
 
 TEST(Result, Value) {
-    auto testValue = []() -> Result<int> {
-        // also testing convertion
-        // from type T2_ (aka 'float') to type T_ (aka 'int') 
-        return static_cast<int>(123.5f);
+    TrackingHelper::get_stats().reset();
+
+    auto testValue = []() -> Result<TrackingStruct<int>> {
+        return TrackingHelper::create_struct<int>(123);
     };
 
-    const auto resultValue = testValue();
+    const auto& resultValue = TRY_FAIL(testValue());
 
-    EXPECT_EQ(resultValue.value(), 123);
+    EXPECT_EQ(resultValue.value, 123);
+
+    FAIL_TRACKING_HAS_OPERATION(CopyConstructor)
+    FAIL_TRACKING_HAS_OPERATION(CopyAssignment)
+    FAIL_TRACKING_HAS_OPERATION(MoveConstructor)
+    FAIL_TRACKING_HAS_OPERATION(MoveAssignment)
 }
 
 TEST(Result, LValueReference) {
@@ -142,8 +150,8 @@ TEST(Result, CustomErrorType) {
         int code;
         std::string message;
 
-        CustomError(int c, std::string msg) :
-            code(c), message(std::move(msg)) {}
+        CustomError(int c, std::string msg)
+            : code(c), message(std::move(msg)) {}
 
         void print(std::ostream& stream) const noexcept override {
             stream << "Error " << code << ": " << message;
@@ -214,8 +222,8 @@ TEST(Result, LargeObjects) {
     struct LargeObject {
         std::array<char, 1024> data;
 
-        LargeObject() :
-            data{} {
+        LargeObject()
+            : data{} {
             data.fill('A');
         }
 
