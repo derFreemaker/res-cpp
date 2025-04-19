@@ -13,12 +13,15 @@ CPMAddPackage(
 )
 
 add_executable(res-cpp_tests
+        event_listener_registration.cpp
+        
         tracking_struct.hpp
+        tracking_reset_listener.hpp
+
+        common.hpp
 
         normal.cpp
         try.cpp
-        hold.cpp
-        common.hpp
 )
 target_link_libraries(res-cpp_tests PUBLIC
         gtest

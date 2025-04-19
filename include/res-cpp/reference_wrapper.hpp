@@ -15,7 +15,7 @@ private:
 
 public:
     explicit constexpr ReferenceWrapper(T& data) noexcept
-        : data_(std::addressof(data)) {}
+        : data_(&data) {}
 
     constexpr T& get() const noexcept {
         return static_cast<T&>(*data_);
@@ -27,19 +27,19 @@ public:
 };
 
 template <typename T>
-struct ReferenceWrapper<T&&> {
+struct ReferenceWrapper<const T&> {
 private:
     T* data_;
 
 public:
-    constexpr ReferenceWrapper(T&& data) noexcept
-        : data_(std::addressof(data)) {}
+    explicit constexpr ReferenceWrapper(const T& data) noexcept
+        : data_(&const_cast<T&>(data)) {}
 
-    constexpr T&& get() const noexcept {
-        return static_cast<T&&>(*data_);
+    constexpr const T& get() const noexcept {
+        return static_cast<T&>(*data_);
     }
 
-    constexpr operator T&&() const noexcept {
+    constexpr operator const T&() const noexcept {
         return get();
     }
 };

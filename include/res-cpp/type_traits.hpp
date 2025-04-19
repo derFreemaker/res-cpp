@@ -27,6 +27,9 @@ using make_const_t = typename detail::make_const<T>::type;
 template <typename T>
 using make_lvalue_reference_t = std::remove_reference_t<T>&;
 
+template <typename T>
+using make_rvalue_reference_t = std::remove_reference_t<T>&&;
+
 }
 
 #endif //RESCPP_TYPE_TRAITS_H

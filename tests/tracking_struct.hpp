@@ -7,6 +7,8 @@
 #include <stacktrace>
 #include <gtest/gtest.h>
 
+#include "tracking_struct.hpp"
+
 namespace ResCpp::testing {
 
 enum class OperationType : uint8_t {
@@ -35,7 +37,7 @@ public:
     }
 
     void add_operation(OperationType type) {
-        operations.emplace_back(type, std::stacktrace::current(1));
+        operations.emplace_back(type, std::stacktrace::current(2));
     }
 
     [[nodiscard]]
@@ -47,21 +49,42 @@ public:
         }
         return std::nullopt;
     }
+
+    [[nodiscard]]
+    std::vector<OperationEntry> get_operations(const OperationType type) const {
+        std::vector<OperationEntry> result;
+        for (const auto& element : operations) {
+            if (element.type == type) {
+                result.push_back(element);
+            }
+        }
+        return result;
+    }
+};
+
+struct TrackingHelper {
+    static TrackingStats* get_stats() {
+        static TrackingStats stats{};
+        return &stats;
+    }
 };
 
 template <typename T>
 struct TrackingStruct {
-private:
-    TrackingStruct(TrackingStats* stats, T&& value) noexcept
-        : stats(stats), value(std::forward<T>(value)) {}
-
-    friend struct TrackingHelper;
-
-public:
     TrackingStats* stats;
     T value;
 
-    TrackingStruct() noexcept = delete;
+    TrackingStruct() noexcept
+        : stats(TrackingHelper::get_stats()),
+          value() {
+        stats->add_operation(OperationType::DefaultConstructor);
+    }
+
+    TrackingStruct(T&& value) noexcept
+        : stats(TrackingHelper::get_stats()),
+          value(std::forward<T>(value)) {
+        stats->add_operation(OperationType::ValueConstructor);
+    }
 
     TrackingStruct(const TrackingStruct& other) noexcept
         : stats(other.stats), value(other.value) {
@@ -69,6 +92,10 @@ public:
     }
 
     TrackingStruct& operator=(const TrackingStruct& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
         stats = other.stats;
         stats->add_operation(OperationType::CopyAssignment);
         value = other.value;
@@ -79,7 +106,12 @@ public:
         : stats(other.stats), value(std::move(other.value)) {
         stats->add_operation(OperationType::MoveConstructor);
     }
-    TrackingStruct& operator=(const TrackingStruct&& other) noexcept {
+
+    TrackingStruct& operator=(TrackingStruct&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
         stats = other.stats;
         stats->add_operation(OperationType::MoveAssignment);
         value = std::move(other.value);
@@ -91,27 +123,27 @@ public:
     }
 };
 
-struct TrackingHelper {
-    static TrackingStats& get_stats() {
-        static TrackingStats stats{};
-        return stats;
-    }
-
-    template <typename T>
-    [[nodiscard]]
-    static TrackingStruct<T> create_struct(T&& args) {
-        return TrackingStruct(&get_stats(), std::forward<T>(args));
-    }
-};
-
 }
 
 #define FAIL_TRACKING_HAS_OPERATION(Type) \
-    if (const auto operation = ::ResCpp::testing::TrackingHelper::get_stats().has_operation(OperationType::Type)) { \
-        FAIL() << #Type << " happend at:\n" <<  operation.value().stacktrace; \
+    { \
+        if (const auto operation = ::ResCpp::testing::TrackingHelper::get_stats()->has_operation(OperationType::Type)) { \
+            FAIL() << #Type << " happened at:\n" << operation.value().stacktrace; \
+        } \
     }
 
+#define FAIL_TRACKING_HAS_MORE_OPERATION(Type, Count) \
+    { \
+        const auto operations = ::ResCpp::testing::TrackingHelper::get_stats()->get_operations(OperationType::Type); \
+        if (operations.size() > Count) { \
+            FAIL() << #Type << " happened more than: " << Count << "\n"; \
+        } \
+    }
+
+
 #define FAIL_TRACKING_HAS_OPERATIONS() \
+    FAIL_TRACKING_HAS_OPERATION(DefaultConstructor) \
+    FAIL_TRACKING_HAS_OPERATION(ValueConstructor) \
     FAIL_TRACKING_HAS_OPERATION(CopyConstructor) \
     FAIL_TRACKING_HAS_OPERATION(CopyAssignment) \
     FAIL_TRACKING_HAS_OPERATION(MoveConstructor) \

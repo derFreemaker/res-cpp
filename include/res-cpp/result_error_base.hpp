@@ -4,11 +4,7 @@
 #include <ostream>
 #include <string>
 
-#include "res-cpp/tags.hpp"
-
 namespace ResCpp {
-template <typename T, typename ErrorT>
-struct Result;
 
 template <typename DerivedT>
 struct ResultErrorBase {
@@ -27,12 +23,8 @@ struct ResultErrorBase {
         error.print(stream);
         return stream;
     }
-
-    template <typename T>
-    operator Result<T, DerivedT>() const noexcept {
-        return Result<T, DerivedT>(detail::Error, *this);
-    }
 };
+
 }
 
 #endif //RESCPP_RESULT_ERROR_BASE_H

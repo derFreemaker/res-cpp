@@ -3,14 +3,7 @@
 
 #include <stdexcept>
 
-#include "res-cpp/result_storage.hpp"
-
 namespace ResCpp::detail {
-template <typename ErrorT>
-void ThrowBadValueAccessException() {
-    throw std::runtime_error("Attempted to access value of an error Result. Error: " + ResultErrorStorage<ErrorT>().value().str());
-}
-
 template <typename ErrorT>
 void ThrowBadValueAccessException(const ErrorT& error) {
     throw std::runtime_error("Attempted to access value of an error Result. Error: " + error.str());

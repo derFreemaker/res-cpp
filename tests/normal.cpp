@@ -1,13 +1,10 @@
 #include <array>
 #include <gtest/gtest.h>
 
-#include "res-cpp/res-cpp.hpp"
-
 #include "common.hpp"
-#include "tracking_struct.hpp"
 
 namespace ResCpp::testing {
-TEST(Result, Error) {
+TEST(Normal, Error) {
     auto testError = []() -> Result<void> {
         return { RESULT_ERROR(), "some error: {0}", 2345 };
     };
@@ -18,7 +15,7 @@ TEST(Result, Error) {
     EXPECT_EQ(resultTestError.error().str(), "some error: 2345");
 }
 
-TEST(Result, Void) {
+TEST(Normal, Void) {
     auto testSuccess = []() -> Result<void> {
         return {};
     };
@@ -28,24 +25,28 @@ TEST(Result, Void) {
     EXPECT_FALSE(resultTestSuccess.has_error());
 }
 
-TEST(Result, Value) {
-    TrackingHelper::get_stats().reset();
+TEST(Normal, Value) {
+    {
+        auto testValue = []() -> Result<TrackingStruct<int>> {
+            return TrackingStruct(123);
+        };
 
-    auto testValue = []() -> Result<TrackingStruct<int>> {
-        return TrackingHelper::create_struct<int>(123);
-    };
+        const auto resultValue = TRY_FAIL(testValue());
 
-    const auto& resultValue = TRY_FAIL(testValue());
+        EXPECT_EQ(resultValue.value, 123);
+    }
 
-    EXPECT_EQ(resultValue.value, 123);
-
-    FAIL_TRACKING_HAS_OPERATION(CopyConstructor)
+    FAIL_TRACKING_HAS_OPERATION(DefaultConstructor)
     FAIL_TRACKING_HAS_OPERATION(CopyAssignment)
-    FAIL_TRACKING_HAS_OPERATION(MoveConstructor)
     FAIL_TRACKING_HAS_OPERATION(MoveAssignment)
+
+    FAIL_TRACKING_HAS_MORE_OPERATION(ValueConstructor, 1)
+    FAIL_TRACKING_HAS_MORE_OPERATION(MoveConstructor, 1)
+    FAIL_TRACKING_HAS_MORE_OPERATION(CopyConstructor, 1)
+    FAIL_TRACKING_HAS_MORE_OPERATION(Destructor, 2)
 }
 
-TEST(Result, LValueReference) {
+TEST(Normal, LValueReference) {
     int testInt = 3456;
     auto testReference = [&testInt]() -> Result<int&> {
         return testInt;
@@ -56,7 +57,7 @@ TEST(Result, LValueReference) {
     EXPECT_EQ(resultReference.value(), testInt);
 }
 
-TEST(Result, ConstLValueReference) {
+TEST(Normal, ConstLValueReference) {
     constexpr int testInt = 786345;
     auto testReference = [&testInt]() -> Result<const int&> {
         return testInt;
@@ -67,25 +68,25 @@ TEST(Result, ConstLValueReference) {
     EXPECT_EQ(resultReference.value(), testInt);
 }
 
-TEST(Result, RValueReference) {
+TEST(Normal, RValueReference) {
     int testInt = 3456;
     auto testReference = [&testInt]() -> Result<int&&> {
-        return std::move(testInt);
+        return std::move(testInt); // NOLINT(*-move-const-arg)
     };
 
     EXPECT_EQ(testReference().value(), testInt);
 }
 
-TEST(Result, ConstRValueReference) {
+TEST(Normal, ConstRValueReference) {
     constexpr int testInt = 786345;
     auto testReference = [&testInt]() -> Result<const int&&> {
-        return std::move(testInt);
+        return std::move(testInt); // NOLINT(*-move-const-arg)
     };
 
     EXPECT_EQ(testReference().value(), testInt);
 }
 
-TEST(Result, Pointer) {
+TEST(Normal, Pointer) {
     int testInt = 87345;
 
     auto testReference = [&testInt]() -> Result<int*> {
@@ -97,7 +98,7 @@ TEST(Result, Pointer) {
     EXPECT_EQ(resultReference.value(), &testInt);
 }
 
-TEST(Result, ConstPointer) {
+TEST(Normal, ConstPointer) {
     constexpr int testInt = 12893;
 
     auto testReference = [&testInt]() -> Result<const int*> {
@@ -109,7 +110,7 @@ TEST(Result, ConstPointer) {
     EXPECT_EQ(resultReference.value(), &testInt);
 }
 
-TEST(Result, Convertion) {
+TEST(Normal, Convertion) {
     constexpr float testFloat = 123.5f;
 
     auto testConvertion = [&testFloat]() -> Result<int> {
@@ -122,7 +123,7 @@ TEST(Result, Convertion) {
 }
 
 // Testing a chain of Results
-TEST(Result, Chain) {
+TEST(Normal, Chain) {
     auto firstFunction = []() -> Result<int> {
         return 42;
     };
@@ -134,7 +135,7 @@ TEST(Result, Chain) {
     auto chainResults = [&firstFunction, &secondFunction]() -> Result<std::string> {
         auto first = firstFunction();
         if (first.has_error()) {
-            return { detail::PassErrorTag<ResultError>{} };
+            return first;
         }
         return secondFunction(first.value());
     };
@@ -145,13 +146,15 @@ TEST(Result, Chain) {
 }
 
 // Testing with custom error types
-TEST(Result, CustomErrorType) {
+TEST(Normal, CustomErrorType) {
     struct CustomError : ResultErrorBase<CustomError> {
         int code;
         std::string message;
 
         CustomError(int c, std::string msg)
             : code(c), message(std::move(msg)) {}
+
+        CustomError& operator=(const CustomError&) noexcept = default;
 
         void print(std::ostream& stream) const noexcept override {
             stream << "Error " << code << ": " << message;
@@ -165,7 +168,7 @@ TEST(Result, CustomErrorType) {
     };
 
     auto testCustomError = []() -> Result<int, CustomError> {
-        return { detail::Error, CustomError(404, "Not Found") };
+        return { RESULT_ERROR(), CustomError(404, "Not Found") };
     };
 
     const auto result = testCustomError();
@@ -174,7 +177,7 @@ TEST(Result, CustomErrorType) {
 }
 
 // Testing with std::tuple
-TEST(Result, Tuple) {
+TEST(Normal, Tuple) {
     auto tupleFunction = []() -> Result<std::tuple<int, std::string, double>> {
         return std::make_tuple(42, std::string("hello"), 3.14);
     };
@@ -189,7 +192,7 @@ TEST(Result, Tuple) {
 }
 
 // Testing const correctness
-TEST(Result, ConstCorrectness) {
+TEST(Normal, ConstCorrectness) {
     auto getValue = []() -> Result<int> {
         return 42;
     };
@@ -203,7 +206,7 @@ TEST(Result, ConstCorrectness) {
 }
 
 // Testing with move-only types
-TEST(Result, MoveOnlyTypes) {
+TEST(Normal, MoveOnlyTypes) {
     auto getUniquePtr = []() -> Result<std::unique_ptr<int>> {
         return std::make_unique<int>(42);
     };
@@ -218,7 +221,7 @@ TEST(Result, MoveOnlyTypes) {
 }
 
 // Testing with large objects to check performance with stack vs heap storage
-TEST(Result, LargeObjects) {
+TEST(Normal, LargeObjects) {
     struct LargeObject {
         std::array<char, 1024> data;
 
@@ -243,7 +246,7 @@ TEST(Result, LargeObjects) {
 }
 
 // Testing error handling behaviors
-TEST(Result, AccessingErrorOnSuccess) {
+TEST(Normal, AccessingErrorOnSuccess) {
     auto getSuccess = []() -> Result<int> {
         return 42;
     };
@@ -254,7 +257,7 @@ TEST(Result, AccessingErrorOnSuccess) {
 }
 
 // Testing thread safety of the thread_local storage
-TEST(Result, ThreadLocalStorage) {
+TEST(Normal, ThreadLocalStorage) {
     auto getThreadValue = [](int value) -> Result<int> {
         return value;
     };
@@ -263,9 +266,10 @@ TEST(Result, ThreadLocalStorage) {
     std::vector<std::thread> threads;
     std::vector<int> results(10, 0);
 
+    threads.reserve(10);
     for (int i = 0; i < 10; ++i) {
         threads.emplace_back([&results, &getThreadValue, i]() {
-            auto result = getThreadValue(i * 10);
+            const auto result = getThreadValue(i * 10);
             if (!result.has_error()) {
                 results[i] = result.value();
             }

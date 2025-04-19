@@ -126,8 +126,23 @@ TEST(TRY, DifferentErrorTypes) {
     struct CustomError : ResultErrorBase<CustomError> {
         std::string message;
 
-        explicit CustomError(std::string msg) :
-            message(std::move(msg)) {}
+        explicit CustomError(std::string msg)
+            : message(std::move(msg)) {}
+        
+        CustomError& operator=(const CustomError& other) noexcept {
+            if (this == &other) {
+                return *this;
+            }
+
+            try {
+                message = other.message;
+            }
+            catch (const std::exception& e) {
+                message = e.what();
+            }
+
+            return *this;
+        }
 
         void print(std::ostream& stream) const noexcept override {
             stream << message;
@@ -142,13 +157,11 @@ TEST(TRY, DifferentErrorTypes) {
         return { RESULT_ERROR(), CustomError("custom error type") };
     };
 
-    auto useCustomError = [&customErrorFunc]() -> Result<int, FormattedError> {
-        // This won't compile as written because different error types
-        // Need to manually handle error conversion
+    auto useCustomError = [&customErrorFunc]() -> Result<int> {
         try {
             auto result = customErrorFunc();
             if (result.has_error()) {
-                return { RESULT_ERROR(), "Converted: {}", result.error().str() };
+                return { RESULT_ERROR(), result.error() };
             }
             return result.value();
         }
@@ -159,6 +172,6 @@ TEST(TRY, DifferentErrorTypes) {
 
     const auto result = useCustomError();
     EXPECT_TRUE(result.has_error());
-    EXPECT_EQ(result.error().str(), "Converted: custom error type");
+    EXPECT_EQ(result.error().str(), "custom error type");
 }
 }
