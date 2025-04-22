@@ -1,8 +1,9 @@
 #ifndef RESCPP_H
 #define RESCPP_H
 
-#include <optional>
 #include <stdexcept>
+#include <optional>
+#include <type_traits>
 
 namespace rescpp {
 namespace detail {
@@ -47,8 +48,8 @@ struct result {
     using value_type = T;
 
     using error_type = E;
-    static_assert(!std::is_reference_v<error_type>
-                  && !std::is_pointer_v<error_type>,
+    static_assert((!std::is_reference_v<error_type>
+                  && !std::is_pointer_v<error_type>),
                   "can not use references or pointer as error type");
 
 private:
@@ -198,8 +199,8 @@ struct result<void, E> {
     using value_type = void;
 
     using error_type = E;
-    static_assert(!std::is_reference_v<error_type>
-                  && !std::is_pointer_v<error_type>,
+    static_assert((!std::is_reference_v<error_type>
+                  && !std::is_pointer_v<error_type>),
                   "can not use references or pointer as error type");
 
 private:
@@ -243,8 +244,8 @@ public:
 template <typename E>
 struct failure {
     using error_type = E;
-    static_assert(!std::is_reference_v<error_type>
-                  && !std::is_pointer_v<error_type>,
+    static_assert((!std::is_reference_v<error_type>
+                  && !std::is_pointer_v<error_type>),
                   "can not use references or pointer as error type");
 
 private:
