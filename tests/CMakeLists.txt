@@ -12,7 +12,7 @@ CPMAddPackage(
 )
 
 add_executable(res-cpp_tests
-        test.cpp
+        result.cpp
 )
 target_link_libraries(res-cpp_tests
         Catch2::Catch2WithMain

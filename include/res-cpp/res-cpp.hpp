@@ -11,6 +11,10 @@ struct error_tag {};
 
 inline constexpr error_tag error{};
 
+struct pass_error_tag {};
+
+inline constexpr pass_error_tag pass_error{};
+
 struct bad_result_access_exception final : std::logic_error {
     explicit bad_result_access_exception(const char* msg)
         : std::logic_error(msg) {}
@@ -41,7 +45,57 @@ inline void throw_bad_value_access_exception() {
     throw bad_result_access_exception(bad_value_access_exception_message);
 #endif
 }
+
+template <typename>
+struct reference_wrapper;
+
+template <typename T>
+struct reference_wrapper<T&> {
+private:
+    T* ptr;
+
+public:
+    inline constexpr reference_wrapper(T& ref) noexcept
+        : ptr(std::addressof(ref)) {}
+
+    inline constexpr T& get() const noexcept {
+        return *ptr;
+    }
+
+    inline constexpr T* operator->() const noexcept {
+        return ptr;
+    }
+
+    inline constexpr T& operator*() const noexcept {
+        return *ptr;
+    }
+};
+
+template <typename T>
+struct reference_wrapper<const T&> {
+private:
+    const T* ptr;
+
+public:
+    inline constexpr reference_wrapper(const T& ref) noexcept
+        : ptr(std::addressof(ref)) {}
+
+    inline constexpr const T& get() const noexcept {
+        return *ptr;
+    }
+
+    inline constexpr const T* operator->() const noexcept {
+        return ptr;
+    }
+
+    inline constexpr operator const T&() const noexcept {
+        return *ptr;
+    }
+};
 }
+
+template <typename>
+struct failure;
 
 template <typename T, typename E>
 struct result {
@@ -49,13 +103,8 @@ struct result {
 
     using error_type = E;
     static_assert((!std::is_reference_v<error_type>
-                  && !std::is_pointer_v<error_type>),
+                      && !std::is_pointer_v<error_type>),
                   "can not use references or pointer as error type");
-
-private:
-    using storing_type = std::conditional_t<std::is_lvalue_reference_v<value_type>,
-                                            std::reference_wrapper<std::remove_reference_t<value_type>>,
-                                            value_type>;
 
     template <typename V>
     using return_value_type = std::conditional_t<(
@@ -64,6 +113,11 @@ private:
                                                  ),
                                                  value_type,
                                                  V>;
+
+private:
+    using storing_type = std::conditional_t<std::is_lvalue_reference_v<value_type>,
+                                            detail::reference_wrapper<std::remove_volatile_t<value_type>>,
+                                            value_type>;
 
     union {
         error_type error_;
@@ -76,6 +130,10 @@ public:
     inline constexpr result(detail::error_tag, error_type&& error) noexcept
         : error_(std::forward<error_type>(error)), has_error_(true) {}
 
+    template <typename... Args>
+    inline constexpr result(detail::error_tag, Args&&... args) noexcept
+        : error_(std::forward<Args>(args)...), has_error_(true) {}
+
     template <typename E2>
         requires(!std::is_same_v<error_type, E2>
             && std::is_nothrow_convertible_v<E2, error_type>)
@@ -85,15 +143,43 @@ public:
     inline constexpr result(value_type&& value) noexcept
         : value_(std::forward<value_type>(value)), has_error_(false) {}
 
+    template <typename... Args>
+    explicit inline constexpr result(Args&&... args) noexcept
+        : value_(std::forward<Args>(args)...), has_error_(false) {}
+
     template <typename T2>
         requires (!std::is_same_v<value_type, T2>
             && std::is_nothrow_convertible_v<T2, value_type>)
     inline constexpr result(T2&& value) noexcept
-        : value_(std::forward<T2>(value)), has_error_(false) {}
+        : value_(static_cast<value_type>(std::forward<T2>(value))), has_error_(false) {}
+
+    inline constexpr ~result() noexcept {
+        if (has_error_) {
+            if constexpr (std::is_destructible_v<error_type>) {
+                error_.~error_type();
+            }
+            return;
+        }
+
+        if constexpr (std::is_destructible_v<value_type> && !std::is_rvalue_reference_v<value_type>) {
+            value_.~storing_type();
+        }
+    }
 
     [[nodiscard]]
     inline constexpr bool has_error() const noexcept {
         return has_error_;
+    }
+
+    //TODO: find something better than this to get the error value
+    inline constexpr error_type error_value() const noexcept {
+#ifndef NDEBUG
+        if (!has_error()) {
+            detail::throw_bad_error_access_exception();
+        }
+#endif
+
+        return error_;
     }
 
     [[nodiscard]]
@@ -117,7 +203,7 @@ public:
 
         return std::move(error_);
     }
-    
+
     [[nodiscard]]
     inline constexpr const error_type&& error() const && noexcept {
 #ifndef NDEBUG
@@ -140,13 +226,16 @@ public:
         if constexpr (std::is_lvalue_reference_v<value_type>) {
             return value_.get();
         }
+        else if constexpr (std::is_rvalue_reference_v<value_type>) {
+            return std::move(value_);
+        }
         else {
             return value_;
         }
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<const value_type&> value() const & noexcept {
+    inline constexpr std::add_const_t<return_value_type<value_type&>> value() const & noexcept {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -155,6 +244,9 @@ public:
 
         if constexpr (std::is_lvalue_reference_v<value_type>) {
             return value_.get();
+        }
+        else if constexpr (std::is_rvalue_reference_v<value_type>) {
+            return std::move(value_);
         }
         else {
             return value_;
@@ -172,13 +264,16 @@ public:
         if constexpr (std::is_lvalue_reference_v<value_type>) {
             return value_.get();
         }
+        else if constexpr (std::is_rvalue_reference_v<value_type>) {
+            return std::move(value_);
+        }
         else {
             return std::move(value_);
         }
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<const value_type&&> value() const && noexcept {
+    inline constexpr std::add_const_t<return_value_type<value_type&&>> value() const && noexcept {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -187,6 +282,9 @@ public:
 
         if constexpr (std::is_lvalue_reference_v<value_type>) {
             return value_.get();
+        }
+        else if constexpr (std::is_rvalue_reference_v<value_type>) {
+            return std::move(value_);
         }
         else {
             return std::move(value_);
@@ -200,7 +298,7 @@ struct result<void, E> {
 
     using error_type = E;
     static_assert((!std::is_reference_v<error_type>
-                  && !std::is_pointer_v<error_type>),
+                      && !std::is_pointer_v<error_type>),
                   "can not use references or pointer as error type");
 
 private:
@@ -209,6 +307,10 @@ private:
 public:
     inline constexpr result(detail::error_tag, error_type&& error) noexcept
         : error_(std::forward<error_type>(error)) {}
+
+    template <typename... Args>
+    inline constexpr result(detail::error_tag, Args&&... args) noexcept
+        : error_(std::in_place, std::forward<Args>(args)...) {}
 
     inline constexpr result() noexcept
         : error_(std::nullopt) {}
@@ -245,7 +347,7 @@ template <typename E>
 struct failure {
     using error_type = E;
     static_assert((!std::is_reference_v<error_type>
-                  && !std::is_pointer_v<error_type>),
+                      && !std::is_pointer_v<error_type>),
                   "can not use references or pointer as error type");
 
 private:
@@ -254,6 +356,10 @@ private:
 public:
     inline constexpr failure(E&& error) noexcept
         : error_(std::forward<E>(error)) {}
+
+    template <typename... Args>
+    explicit inline constexpr failure(std::in_place_t, Args&&... args) noexcept
+        : error_(std::forward<Args>(args)...) {}
 
     [[nodiscard]]
     inline constexpr const error_type& error() const & noexcept {
@@ -271,8 +377,14 @@ public:
     }
 
     template <typename T>
-    inline constexpr operator result<T, E>() noexcept {
-        return result<T, E>(detail::error, std::forward<E>(error_));
+    inline constexpr operator result<T, error_type>() const noexcept {
+        return result<T, error_type>(detail::error, error_);
+    }
+
+    template <typename T, typename E2>
+        requires (std::is_constructible_v<E2, error_type>)
+    inline constexpr operator result<T, E2>() const noexcept(std::is_nothrow_constructible_v<E2, error_type>) {
+        return result<T, E2>(detail::error, static_cast<E2>(error_));
     }
 };
 
@@ -280,6 +392,61 @@ template <typename E>
 inline constexpr failure<E> fail(E&& error) noexcept {
     return failure<E>(std::forward<E>(error));
 }
+
+template <typename E, typename... Args>
+inline constexpr failure<E> fail(Args&&... args) noexcept {
+    return failure<E>(std::in_place, std::forward<Args>(args)...);
+}
+
+template <typename E>
+inline constexpr failure<E> fail(detail::pass_error_tag, E&& error) noexcept {
+    return failure<E>(std::forward<E>(error));
+}
+
+namespace detail {
+template <typename E>
+inline constexpr void try_helper(const result<void, E>&) {}
+
+template <typename T, typename E>
+inline constexpr typename result<T, E>::template return_value_type<const T&> try_helper(const result<T, E>& result) {
+    return result.value();
+}
+}
+
+/// 'result_'
+#define TRY_IMPL(expr, ...) \
+    ::rescpp::detail::try_helper(({ \
+        auto result_ = (expr); \
+        if (result_.has_error()) { \
+            __VA_ARGS__ \
+        } \
+        result_; \
+    }))
+
+//// WARNING: NOT 'constexpr' compatible
+#define TRY(...) \
+    TRY_IMPL((__VA_ARGS__), \
+        return ::rescpp::fail(::rescpp::detail::pass_error, \
+            static_cast<decltype(result_)::error_type>(result_.error()) \
+        ); \
+    )
+
+#define CONCAT_IMPL(a, b) a##b
+#define CONCAT(a, b) CONCAT_IMPL(a, b)
+
+#define TRY_RESULT_NAME(name) CONCAT(name, _result)
+#define TRY_RESULT_TYPE_NAME(name) CONCAT(name, _result_type)
+
+#define TRY_IMPL_(name, expr, ...) \
+    auto TRY_RESULT_NAME(name) = (expr); \
+    using TRY_RESULT_TYPE_NAME(name) = decltype(TRY_RESULT_NAME(name)); \
+    if (TRY_RESULT_NAME(name).has_error()) { \
+        __VA_ARGS__ \
+    } \
+    typename TRY_RESULT_TYPE_NAME(name)::value_type name = ::rescpp::detail::try_helper(TRY_RESULT_NAME(name))
+
+#define TRY_(name, ...) \
+    TRY_IMPL_(name, (__VA_ARGS__), return ::rescpp::fail(::rescpp::detail::pass_error, static_cast<typename TRY_RESULT_TYPE_NAME(name)::error_type>(TRY_RESULT_NAME(name).error()));)
 }
 
 #endif //RESCPP_H

@@ -54,3 +54,7 @@ return result::fail(parse_error::none);
 return result::ok(123);
 ```
 basically the same thing just that the functions provide more possibilities.
+
+### solution
+we are using the function ``rescpp::fail(...)`` to indicate a fail
+and just return is success.
