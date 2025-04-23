@@ -17,6 +17,7 @@ and we go from there.
 # TODO
 - more compiler support
 - lower needed c++ standard
+- support for custom result converter (to allow for converting for external types) 
 
 # Dependencies (only Testing)
 getting managed through [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)
