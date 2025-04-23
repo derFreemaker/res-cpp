@@ -18,3 +18,7 @@ target_link_libraries(res-cpp_tests
         Catch2::Catch2WithMain
         res-cpp
 )
+
+target_compile_definitions(res-cpp INTERFACE
+        RESCPP_DISABLE_TRY_MACRO
+)

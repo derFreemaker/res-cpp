@@ -171,17 +171,6 @@ public:
         return has_error_;
     }
 
-    //TODO: find something better than this to get the error value
-    inline constexpr error_type error_value() const noexcept {
-#ifndef NDEBUG
-        if (!has_error()) {
-            detail::throw_bad_error_access_exception();
-        }
-#endif
-
-        return error_;
-    }
-
     [[nodiscard]]
     inline constexpr const error_type& error() const & noexcept {
 #ifndef NDEBUG
@@ -264,9 +253,6 @@ public:
         if constexpr (std::is_lvalue_reference_v<value_type>) {
             return value_.get();
         }
-        else if constexpr (std::is_rvalue_reference_v<value_type>) {
-            return std::move(value_);
-        }
         else {
             return std::move(value_);
         }
@@ -282,9 +268,6 @@ public:
 
         if constexpr (std::is_lvalue_reference_v<value_type>) {
             return value_.get();
-        }
-        else if constexpr (std::is_rvalue_reference_v<value_type>) {
-            return std::move(value_);
         }
         else {
             return std::move(value_);
@@ -382,7 +365,7 @@ public:
     }
 
     template <typename T, typename E2>
-        requires (std::is_constructible_v<E2, error_type>)
+        requires (!std::is_same_v<error_type, E2> && std::is_constructible_v<E2, error_type>)
     inline constexpr operator result<T, E2>() const noexcept(std::is_nothrow_constructible_v<E2, error_type>) {
         return result<T, E2>(detail::error, static_cast<E2>(error_));
     }
@@ -413,8 +396,11 @@ inline constexpr typename result<T, E>::template return_value_type<const T&> try
 }
 }
 
-/// 'result_'
-#define TRY_IMPL(expr, ...) \
+#if !defined(RESCPP_DISABLE_TRY_MACRO)
+
+/// WARNING: NOT 'constexpr' compatible
+/// 'result_' is the used identifier for the result object.
+#define RESCPP_TRY_IMPL(expr, ...) \
     ::rescpp::detail::try_helper(({ \
         auto result_ = (expr); \
         if (result_.has_error()) { \
@@ -423,30 +409,35 @@ inline constexpr typename result<T, E>::template return_value_type<const T&> try
         result_; \
     }))
 
-//// WARNING: NOT 'constexpr' compatible
-#define TRY(...) \
-    TRY_IMPL((__VA_ARGS__), \
+/// WARNING: NOT 'constexpr' compatible
+#define RESCPP_TRY(...) \
+    RESCPP_TRY_IMPL((__VA_ARGS__), \
         return ::rescpp::fail(::rescpp::detail::pass_error, \
             static_cast<decltype(result_)::error_type>(result_.error()) \
         ); \
     )
 
-#define CONCAT_IMPL(a, b) a##b
-#define CONCAT(a, b) CONCAT_IMPL(a, b)
+#define RESCPP_CONCAT_IMPL(a, b) a##b
+#define RESCPP_CONCAT(a, b) RESCPP_CONCAT_IMPL(a, b)
 
-#define TRY_RESULT_NAME(name) CONCAT(name, _result)
-#define TRY_RESULT_TYPE_NAME(name) CONCAT(name, _result_type)
+#define RESCPP_TRY_RESULT_NAME(name) RESCPP_CONCAT(name, _result)
+#define RESCPP_TRY_RESULT_TYPE(name) RESCPP_CONCAT(name, _result_type)
 
-#define TRY_IMPL_(name, expr, ...) \
-    auto TRY_RESULT_NAME(name) = (expr); \
-    using TRY_RESULT_TYPE_NAME(name) = decltype(TRY_RESULT_NAME(name)); \
-    if (TRY_RESULT_NAME(name).has_error()) { \
+/// '<name>_result' is the used identifier for the result object.
+/// It's recommended to use 'RESCPP_TRY_RESULT_NAME(<name>)' for result object.
+/// And to use 'RESCPP_TRY_RESULT_TYPE(<name>)' for result type.
+#define RESCPP_TRY_IMPL_(name, expr, ...) \
+    auto RESCPP_TRY_RESULT_NAME(name) = (expr); \
+    using RESCPP_TRY_RESULT_TYPE(name) = decltype(RESCPP_TRY_RESULT_NAME(name)); \
+    if (RESCPP_TRY_RESULT_NAME(name).has_error()) { \
         __VA_ARGS__ \
     } \
-    typename TRY_RESULT_TYPE_NAME(name)::value_type name = ::rescpp::detail::try_helper(TRY_RESULT_NAME(name))
+    typename RESCPP_TRY_RESULT_TYPE(name)::value_type name = ::rescpp::detail::try_helper(RESCPP_TRY_RESULT_NAME(name))
 
-#define TRY_(name, ...) \
-    TRY_IMPL_(name, (__VA_ARGS__), return ::rescpp::fail(::rescpp::detail::pass_error, static_cast<typename TRY_RESULT_TYPE_NAME(name)::error_type>(TRY_RESULT_NAME(name).error()));)
+#define RESCPP_TRY_(name, ...) \
+    RESCPP_TRY_IMPL_(name, (__VA_ARGS__), return ::rescpp::fail(::rescpp::detail::pass_error, static_cast<typename RESCPP_TRY_RESULT_TYPE(name)::error_type>(RESCPP_TRY_RESULT_NAME(name).error()));)
+
+#endif
 }
 
 #endif //RESCPP_H

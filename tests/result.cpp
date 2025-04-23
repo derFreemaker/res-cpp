@@ -1,4 +1,3 @@
-#define CATCH_CONFIG_MAIN
 #include <string>
 #include <memory>
 #include <variant>
@@ -7,6 +6,8 @@
 #include <map>
 #include <unordered_map>
 #include <functional>
+
+#define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
 
 #include "res-cpp/res-cpp.hpp"
