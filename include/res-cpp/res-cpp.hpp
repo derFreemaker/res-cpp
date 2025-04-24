@@ -467,7 +467,7 @@ inline constexpr typename result<T, E>::template return_value_type<const T&> try
 #define RESCPP_TRY(...) \
     RESCPP_TRY_IMPL((__VA_ARGS__), \
         return ::rescpp::fail(::rescpp::detail::pass_error, \
-            static_cast<decltype(result_)::error_type>(result_.error()) \
+            std::move(result_).error() \
         ); \
     )
 
@@ -489,7 +489,11 @@ inline constexpr typename result<T, E>::template return_value_type<const T&> try
     typename RESCPP_TRY_RESULT_TYPE(name)::value_type name = ::rescpp::detail::try_helper(RESCPP_TRY_RESULT_NAME(name))
 
 #define RESCPP_TRY_(name, ...) \
-    RESCPP_TRY_IMPL_(name, (__VA_ARGS__), return ::rescpp::fail(::rescpp::detail::pass_error, static_cast<typename RESCPP_TRY_RESULT_TYPE(name)::error_type>(RESCPP_TRY_RESULT_NAME(name).error()));)
+    RESCPP_TRY_IMPL_(name, (__VA_ARGS__), \
+        return ::rescpp::fail(::rescpp::detail::pass_error, \
+            std::move(RESCPP_TRY_RESULT_NAME(name)).error() \
+        ); \
+    )
 
 #endif
 }
