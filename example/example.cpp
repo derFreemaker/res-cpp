@@ -1,18 +1,19 @@
 #include <res-cpp/res-cpp.hpp>
 
-struct some_error {
-    int number;
-
-    inline constexpr some_error(const int number) : number(number) {}
+enum class some_error {
+    none,
+    test,
 };
 
-struct some_other_error {
-    int number;
+enum class some_other_error {
+    none,
+    test2
+};
 
-    inline constexpr some_other_error(const int number) : number(number) {}
-
-    inline constexpr operator some_error() const noexcept {
-        return { number };
+template <>
+struct rescpp::type_converter<some_other_error, some_error> {
+    static constexpr some_error convert(const some_other_error& from) noexcept {
+        return static_cast<some_error>(from);
     }
 };
 
@@ -27,9 +28,8 @@ static constexpr rescpp::result<const int, some_other_error> test_foo(bool fail)
     return 123;
 }
 
-static constexpr rescpp::result<bool, some_error> test_foo_chain(bool fail) {
-    TRY_(foo, test_foo(fail));
-    
+static constexpr rescpp::result<const bool, some_error> test_foo_chain(bool fail) {
+    RESCPP_TRY_(foo, test_foo(fail));
     return foo != 0;
 }
 

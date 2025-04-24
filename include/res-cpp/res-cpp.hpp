@@ -7,6 +7,27 @@
 
 namespace rescpp {
 namespace detail {
+template <typename T>
+struct make_const {
+    using type = const T;
+};
+
+template <typename T>
+struct make_const<const T> {
+    using type = const T;
+};
+
+template <typename T>
+using make_const_t = typename make_const<T>::type;
+
+template <typename T>
+using make_lvalue_reference_t = std::remove_reference_t<T>&;
+}
+
+template <typename From, typename To>
+struct type_converter;
+
+namespace detail {
 struct error_tag {};
 
 inline constexpr error_tag error{};
@@ -92,6 +113,14 @@ public:
         return *ptr;
     }
 };
+
+template <typename From, typename To>
+concept has_type_converter = requires(
+    std::conditional_t<std::is_rvalue_reference_v<From>,
+                       From,
+                       make_lvalue_reference_t<make_const_t<From>>> from) {
+        { type_converter<From, To>::convert(from) } noexcept -> std::same_as<To>;
+    };
 }
 
 template <typename>
@@ -224,7 +253,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr std::add_const_t<return_value_type<value_type&>> value() const & noexcept {
+    inline constexpr detail::make_const_t<return_value_type<value_type&>> value() const & noexcept {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -259,7 +288,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr std::add_const_t<return_value_type<value_type&&>> value() const && noexcept {
+    inline constexpr detail::make_const_t<return_value_type<value_type&&>> value() const && noexcept {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -272,6 +301,24 @@ public:
         else {
             return std::move(value_);
         }
+    }
+
+    template <typename T2, typename E2>
+    inline constexpr operator result<T2, E2>() const & noexcept(std::is_nothrow_convertible_v<value_type, T2>
+        && std::is_nothrow_convertible_v<error_type, E2>) {
+        if (has_error()) {
+            return failure<error_type>(error_);
+        }
+        return result<T2, E2>(value_);
+    }
+
+    template <typename T2, typename E2>
+    inline constexpr operator result<T2, E2>() const && noexcept(std::is_nothrow_convertible_v<value_type, T2>
+        && std::is_nothrow_convertible_v<error_type, E2>) {
+        if (has_error()) {
+            return failure<error_type>(error_);
+        }
+        return result<T2, E2>(std::move(value_));
     }
 };
 
@@ -368,6 +415,13 @@ public:
         requires (!std::is_same_v<error_type, E2> && std::is_constructible_v<E2, error_type>)
     inline constexpr operator result<T, E2>() const noexcept(std::is_nothrow_constructible_v<E2, error_type>) {
         return result<T, E2>(detail::error, static_cast<E2>(error_));
+    }
+
+    template <typename T, typename E2>
+        requires (!std::is_same_v<error_type, E2> && !std::is_constructible_v<E2, error_type>
+            && detail::has_type_converter<error_type, E2>)
+    inline constexpr operator result<T, E2>() const noexcept {
+        return result<T, E2>(detail::error, type_converter<error_type, E2>::convert(error_));
     }
 };
 
