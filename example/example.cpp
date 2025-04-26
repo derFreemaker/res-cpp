@@ -12,7 +12,7 @@ enum class some_other_error {
 
 template <>
 struct rescpp::type_converter<some_other_error, some_error> {
-    static constexpr some_error convert(const some_other_error& from) noexcept {
+    static constexpr some_error convert(const some_other_error&& from) noexcept {
         return static_cast<some_error>(from);
     }
 };
@@ -29,8 +29,8 @@ static constexpr rescpp::result<const int, some_other_error> test_foo(bool fail)
 }
 
 static constexpr rescpp::result<const bool, some_error> test_foo_chain(bool fail) {
-    RESCPP_TRY_(foo, test_foo(fail));
-    return foo != 0;
+    // RESCPP_TRY_(foo, );
+    return *test_foo(fail) != 0;
 }
 
 int main() {
