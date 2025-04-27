@@ -22,7 +22,7 @@ if (${RESCPP_DISABLE_CHECKS_IN_RELEASE})
 endif ()
 
 option(RESCPP_DISABLE_CHECKS "disables result state check when calling .value() or .error() (performance, optimization)")
-if (${RESCPP_DISABLE_EXCEPTIONS})
+if (${RESCPP_DISABLE_CHECKS})
     target_compile_definitions(res-cpp INTERFACE
             RESCPP_DISABLE_CHECKS
     )
