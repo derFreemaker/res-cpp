@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <optional>
 #include <type_traits>
+#include <memory>
 
 namespace rescpp {
 namespace detail {
@@ -46,9 +47,15 @@ struct bad_result_access_exception final : std::logic_error {
         : std::logic_error(msg) {}
 };
 
+#if defined(NDEBUG)
+#define RESCPP_NOEXCEPT noexcept
+#else
+#define RESCPP_NOEXCEPT
+#endif
+
 inline void throw_bad_error_access_exception() {
-    constexpr const char* bad_error_access_exception_message = "cannot access error on a good result";
-#if defined(RESCPP_RESULT_DISABLE_EXCEPTIONS)
+    const char* bad_error_access_exception_message = "cannot access error on a good result";
+#if defined(RESCPP_DISABLE_EXCEPTIONS)
     std::fprintf(
         stderr,
         bad_error_access_exception_message
@@ -60,8 +67,8 @@ inline void throw_bad_error_access_exception() {
 }
 
 inline void throw_bad_value_access_exception() {
-    constexpr const char* bad_value_access_exception_message = "cannot access value on a fail result";
-#if defined(RESCPP_RESULT_DISABLE_EXCEPTIONS)
+    const char* bad_value_access_exception_message = "cannot access value on a bad result";
+#if defined(RESCPP_DISABLE_EXCEPTIONS)
     std::fprintf(
         stderr,
         bad_value_access_exception_message
@@ -84,6 +91,8 @@ public:
     inline constexpr reference_wrapper(T& ref) noexcept
         : ptr(std::addressof(ref)) {}
 
+    inline constexpr ~reference_wrapper() noexcept = default;
+    
     inline constexpr T& get() const noexcept {
         return *ptr;
     }
@@ -106,6 +115,8 @@ public:
     inline constexpr reference_wrapper(const T& ref) noexcept
         : ptr(std::addressof(ref)) {}
 
+    inline constexpr ~reference_wrapper() noexcept = default;
+    
     inline constexpr const T& get() const noexcept {
         return *ptr;
     }
@@ -144,7 +155,7 @@ struct result {
 private:
     using storing_type = std::conditional_t<std::is_lvalue_reference_v<value_type>,
                                             detail::reference_wrapper<std::remove_volatile_t<value_type>>,
-                                            value_type>;
+                                            std::remove_const_t<value_type>>;
 
     union {
         error_type error_;
@@ -154,42 +165,59 @@ private:
     bool has_error_;
 
 public:
-    inline constexpr result(detail::error_tag, error_type&& error) noexcept
-        : error_(std::forward<error_type>(error)), has_error_(true) {}
-
-    template <typename... Args>
-    inline constexpr result(detail::error_tag, Args&&... args) noexcept
-        : error_(std::forward<Args>(args)...), has_error_(true) {}
-
-    template <typename E2>
-        requires(!std::is_same_v<error_type, E2>
-            && std::is_nothrow_convertible_v<E2, error_type>)
-    inline constexpr result(detail::error_tag, E2&& error) noexcept
-        : error_(std::forward<E2>(error)), has_error_(true) {}
+    inline constexpr result(detail::error_tag, const error_type&& error) noexcept
+        : error_(std::forward<const error_type>(error)), has_error_(true) {}
 
     inline constexpr result(value_type&& value) noexcept
         : value_(std::forward<value_type>(value)), has_error_(false) {}
 
     template <typename... Args>
-    explicit inline constexpr result(Args&&... args) noexcept
+    explicit inline constexpr result(std::in_place_t, Args&&... args) noexcept
         : value_(std::forward<Args>(args)...), has_error_(false) {}
 
     template <typename T2>
         requires (!std::is_same_v<value_type, T2>
-            && std::is_nothrow_convertible_v<T2, value_type>)
-    inline constexpr result(T2&& value) noexcept
+            && std::is_convertible_v<T2, value_type>)
+    inline constexpr result(T2&& value)
+        noexcept(std::is_nothrow_convertible_v<T2, value_type>)
         : value_(static_cast<value_type>(std::forward<T2>(value))), has_error_(false) {}
 
-    inline constexpr ~result() noexcept {
+    inline constexpr result(const result& other)
+        noexcept(std::is_nothrow_copy_constructible_v<value_type>
+            && std::is_nothrow_copy_constructible_v<error_type>)
+        requires (std::is_copy_constructible_v<value_type>
+            && std::is_copy_constructible_v<error_type>)
+        : has_error_(other.has_error_) {
         if (has_error_) {
-            if constexpr (std::is_destructible_v<error_type>) {
-                error_.~error_type();
-            }
+            std::construct_at(std::addressof(error_), other.error_);
+        }
+        else {
+            std::construct_at(std::addressof(value_), other.value_);
+        }
+    }
+
+    inline constexpr result(result&& other)
+        noexcept(std::is_nothrow_move_constructible_v<storing_type>
+            && std::is_nothrow_move_constructible_v<error_type>)
+        requires (std::is_move_constructible_v<storing_type>
+            && std::is_move_constructible_v<error_type>)
+        : has_error_(other.has_error_) {
+        if (has_error_) {
+            std::construct_at(std::addressof(error_), std::move(other.error_));
+        }
+        else {
+            std::construct_at(std::addressof(value_), std::move(other.value_));
+        }
+    }
+
+    inline constexpr ~result() noexcept {
+        if (has_error_ && std::is_destructible_v<error_type>) {
+            std::destroy_at(std::addressof(error_));
             return;
         }
 
-        if constexpr (std::is_destructible_v<value_type> && !std::is_rvalue_reference_v<value_type>) {
-            value_.~storing_type();
+        if constexpr (std::is_destructible_v<storing_type> && !std::is_trivially_destructible_v<storing_type>) {
+            std::destroy_at(std::addressof(value_));
         }
     }
 
@@ -199,7 +227,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type& error() const & noexcept {
+    inline constexpr const error_type& error() const & RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
@@ -210,7 +238,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr error_type&& error() && noexcept {
+    inline constexpr const error_type&& error() const && RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
@@ -221,18 +249,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type&& error() const && noexcept {
-#ifndef NDEBUG
-        if (!has_error()) {
-            detail::throw_bad_error_access_exception();
-        }
-#endif
-
-        return std::move(error_);
-    }
-
-    [[nodiscard]]
-    inline constexpr return_value_type<value_type&> value() & noexcept {
+    inline constexpr return_value_type<value_type&> value() & RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -251,7 +268,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<const value_type&> value() const & noexcept {
+    inline constexpr return_value_type<const value_type&> value() const & RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -270,7 +287,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<value_type&&> value() && noexcept {
+    inline constexpr return_value_type<value_type&&> value() && RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -286,7 +303,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<const value_type&&> value() const && noexcept {
+    inline constexpr return_value_type<const value_type&&> value() const && RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (has_error()) {
             detail::throw_bad_value_access_exception();
@@ -317,19 +334,19 @@ public:
     //     return std::forward<return_value_type<const value_type>>(value());
     // }
 
-    inline constexpr return_value_type<value_type&> operator*() & noexcept {
+    inline constexpr return_value_type<value_type&> operator*() & RESCPP_NOEXCEPT {
+        return value();
+    }
+
+    inline constexpr return_value_type<const value_type&> operator*() const & RESCPP_NOEXCEPT {
+        return value();
+    }
+
+    inline constexpr return_value_type<value_type&&> operator*() && RESCPP_NOEXCEPT {
         return std::forward<return_value_type<value_type>>(value());
     }
 
-    inline constexpr return_value_type<const value_type&> operator*() const & noexcept {
-        return std::forward<return_value_type<const value_type>>(value());
-    }
-
-    inline constexpr return_value_type<value_type&&> operator*() && noexcept {
-        return std::forward<return_value_type<value_type>>(value());
-    }
-
-    inline constexpr return_value_type<const value_type&&> operator*() const && noexcept {
+    inline constexpr return_value_type<const value_type&&> operator*() const && RESCPP_NOEXCEPT {
         return std::forward<return_value_type<const value_type>>(value());
     }
 
@@ -362,18 +379,24 @@ struct result<void, E> {
                   "can not use references or pointer as error type");
 
 private:
-    std::optional<error_type> error_;
+    const std::optional<error_type> error_;
 
 public:
-    inline constexpr result(detail::error_tag, error_type&& error) noexcept
-        : error_(std::forward<error_type>(error)) {}
-
-    template <typename... Args>
-    inline constexpr result(detail::error_tag, Args&&... args) noexcept
-        : error_(std::in_place, std::forward<Args>(args)...) {}
+    inline constexpr result(detail::error_tag, const error_type&& error) noexcept
+        : error_(std::forward<const error_type>(error)) {}
 
     inline constexpr result() noexcept
         : error_(std::nullopt) {}
+
+    inline constexpr result(const result& other)
+        noexcept(std::is_nothrow_copy_constructible_v<error_type>)
+        requires (std::is_copy_constructible_v<error_type>)
+        : error_(other.error_) {}
+
+    inline constexpr result(result&& other)
+        noexcept(std::is_nothrow_move_constructible_v<error_type>)
+        requires (std::is_move_constructible_v<error_type>)
+        : error_(std::move(other.error_)) {}
 
     [[nodiscard]]
     inline constexpr bool has_error() const noexcept {
@@ -381,7 +404,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type& error() const & noexcept {
+    inline constexpr const error_type& error() const & RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
@@ -392,7 +415,7 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type&& error() const && noexcept {
+    inline constexpr const error_type&& error() const && RESCPP_NOEXCEPT {
 #ifndef NDEBUG
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
@@ -411,14 +434,17 @@ struct failure {
                   "can not use references or pointer as error type");
 
 private:
-    error_type error_;
+    const error_type error_;
 
 public:
-    inline constexpr failure(E&& error) noexcept
-        : error_(std::forward<E>(error)) {}
+    explicit inline constexpr failure(const E& error) noexcept
+        : error_(std::forward<const E>(error)) {}
+
+    explicit inline constexpr failure(const E&& error) noexcept
+        : error_(std::forward<const E>(error)) {}
 
     template <typename... Args>
-    explicit inline constexpr failure(std::in_place_t, Args&&... args) noexcept
+    inline constexpr failure(std::in_place_t, Args&&... args) noexcept
         : error_(std::forward<Args>(args)...) {}
 
     [[nodiscard]]
@@ -433,7 +459,7 @@ public:
 
     template <typename T>
     inline constexpr operator result<T, error_type>() const noexcept {
-        return result<T, error_type>(detail::error, error_);
+        return result<T, error_type>(detail::error, std::move(error_));
     }
 
     template <typename T, typename E2>
@@ -444,15 +470,20 @@ public:
 
     template <typename T, typename E2>
         requires (!std::is_same_v<error_type, E2> && !std::is_constructible_v<E2, error_type>
-            && detail::has_type_converter<error_type, E2>)
+            && detail::has_type_converter<std::remove_cvref_t<error_type>, std::remove_cvref_t<E2>>)
     inline constexpr operator result<T, E2>() const noexcept {
-        return result<T, E2>(detail::error, type_converter<error_type, E2>::convert(error_));
+        return result<T, E2>(detail::error,
+                             type_converter<
+                                 std::remove_cvref_t<error_type>,
+                                 std::remove_cvref_t<E2>
+                             >::convert(error_)
+        );
     }
 };
 
 template <typename E>
-inline constexpr failure<E> fail(E&& error) noexcept {
-    return failure<E>(std::forward<E>(error));
+inline constexpr failure<E> fail(const E&& error) noexcept {
+    return failure<E>(std::forward<const E>(error));
 }
 
 template <typename E, typename... Args>
@@ -461,22 +492,25 @@ inline constexpr failure<E> fail(Args&&... args) noexcept {
 }
 
 template <typename E>
-inline constexpr failure<E> fail(detail::pass_error_tag, E&& error) noexcept {
-    return failure<E>(std::forward<E>(error));
+inline constexpr failure<E> fail(detail::pass_error_tag, const E&& error) noexcept {
+    return failure<E>(std::forward<const E>(error));
 }
 
 namespace detail {
 template <typename E>
-inline constexpr void try_helper(const result<void, E>&) {}
+inline constexpr void try_helper(result<void, E>&&) {}
+
+template <typename E>
+inline constexpr void try_helper(const result<void, E>&&) {}
 
 template <typename T, typename E>
-inline constexpr typename result<T, E>::template return_value_type<const T&> try_helper(result<T, E>& result) {
-    return result.value();
+inline constexpr auto try_helper(result<T, E>&& res) {
+    return std::forward<typename result<T, E>::template return_value_type<T&&>>(res.value());
 }
 
 template <typename T, typename E>
-inline constexpr make_const_t<typename result<T, E>::template return_value_type<const T&>> try_helper(const result<T, E>& result) {
-    return result.value();
+inline constexpr auto try_helper(const result<T, E>&& res) {
+    return std::forward<typename result<T, E>::template return_value_type<const T&&>>(res.value());
 }
 }
 
@@ -486,18 +520,18 @@ inline constexpr make_const_t<typename result<T, E>::template return_value_type<
 /// 'result_' is the used identifier for the result object.
 #define RESCPP_TRY_IMPL(expr, ...) \
     ::rescpp::detail::try_helper(({ \
-        auto result_ = (expr); \
+        auto&& result_ = (expr); \
         if (result_.has_error()) { \
             __VA_ARGS__ \
         } \
-        result_; \
+        std::move(result_); \
     }))
 
 /// WARNING: NOT 'constexpr' compatible
 #define RESCPP_TRY(...) \
     RESCPP_TRY_IMPL((__VA_ARGS__), \
         return ::rescpp::fail(::rescpp::detail::pass_error, \
-            std::move(result_).error() \
+            std::move(result_.error()) \
         ); \
     )
 
@@ -516,7 +550,7 @@ inline constexpr make_const_t<typename result<T, E>::template return_value_type<
     if (RESCPP_TRY_RESULT_NAME(name).has_error()) { \
         __VA_ARGS__ \
     } \
-    typename RESCPP_TRY_RESULT_TYPE(name)::value_type name = ::rescpp::detail::try_helper(RESCPP_TRY_RESULT_NAME(name))
+    typename RESCPP_TRY_RESULT_TYPE(name)::value_type name = ::rescpp::detail::try_helper(std::move(RESCPP_TRY_RESULT_NAME(name)));
 
 #define RESCPP_TRY_(name, ...) \
     RESCPP_TRY_IMPL_(name, (__VA_ARGS__), \

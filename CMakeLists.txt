@@ -12,7 +12,7 @@ target_include_directories(res-cpp INTERFACE include)
 
 if (${RESCPP_DISABLE_EXCEPTIONS})
     target_compile_definitions(res-cpp INTERFACE
-            RESCPP_RESULT_DISABLE_EXCEPTIONS
+            RESCPP_DISABLE_EXCEPTIONS
     )
 endif ()
 if (${RESCPP_DISABLE_TRY_MACRO})

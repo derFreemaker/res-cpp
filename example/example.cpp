@@ -5,21 +5,24 @@ enum class some_error {
     test,
 };
 
-enum class some_other_error {
-    none,
-    test2
+struct MoveOnlyStruct {
+    explicit constexpr MoveOnlyStruct(int) noexcept {}
+
+    MoveOnlyStruct() = delete;
+    // MoveOnlyStruct(const MoveOnlyStruct&) = delete;
+    // MoveOnlyStruct& operator=(const MoveOnlyStruct&) = delete;
 };
 
 template <>
-struct rescpp::type_converter<some_other_error, some_error> {
-    static constexpr some_error convert(const some_other_error&& from) noexcept {
-        return static_cast<some_error>(from);
+struct rescpp::type_converter<MoveOnlyStruct, some_error> {
+    static constexpr some_error convert(const MoveOnlyStruct& from) noexcept {
+        return some_error::test;
     }
 };
 
-constexpr auto test_failure = rescpp::fail(some_other_error{ 123 });
+constexpr auto test_failure = rescpp::fail(MoveOnlyStruct{ 123 });
 
-static constexpr rescpp::result<const int, some_other_error> test_foo(bool fail) {
+static constexpr rescpp::result<const int, MoveOnlyStruct> test_foo(bool fail) {
     if (fail) {
         // return 0;
         return test_failure;
@@ -29,15 +32,20 @@ static constexpr rescpp::result<const int, some_other_error> test_foo(bool fail)
 }
 
 static constexpr rescpp::result<const bool, some_error> test_foo_chain(bool fail) {
-    // RESCPP_TRY_(foo, );
-    return *test_foo(fail) != 0;
+    RESCPP_TRY_(foo, test_foo(fail));
+    return foo != 0;
 }
 
 int main() {
     constexpr auto value = test_foo(false);
     constexpr auto value2 = test_foo(false);
     printf("%i %i\n", value.value(), value2.value());
-
-    constexpr auto value3 = test_foo_chain(false);
-    printf("%i\n", value3.value());
+    
+    try {
+        constexpr auto value3 = test_foo_chain(true);
+        printf("%i\n", value3.value()); // also throws rescpp::detail::bad_result_access_exception when called, but crashed with abort
+    }
+    catch (const std::exception& e) {
+        printf("%s\n", e.what());
+    }
 }
