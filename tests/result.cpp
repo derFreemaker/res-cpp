@@ -52,7 +52,6 @@ TEST_CASE("Result basic value functionality", "[result]") {
 
         REQUIRE_FALSE(res.has_error());
         REQUIRE(res.value() == 42);
-        REQUIRE(*res == 42);
     }
 
     SECTION("In-place construction") {

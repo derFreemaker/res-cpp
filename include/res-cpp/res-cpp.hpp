@@ -47,13 +47,19 @@ struct bad_result_access_exception final : std::logic_error {
         : std::logic_error(msg) {}
 };
 
-#if defined(NDEBUG)
+#if defined(RESCPP_DISABLE_EXCEPTIONS)
 #define RESCPP_NOEXCEPT noexcept
 #else
 #define RESCPP_NOEXCEPT
 #endif
 
-inline void throw_bad_error_access_exception() {
+#if defined(RESCPP_DISABLE_CHECKS) || defined(RESCPP_DISABLE_EXCEPTIONS)
+#define RESCPP_CHECKS_NOEXCEPT noexcept
+#else
+#define RESCPP_CHECKS_NOEXCEPT
+#endif
+
+inline void throw_bad_error_access_exception() RESCPP_NOEXCEPT {
     const char* bad_error_access_exception_message = "cannot access error on a good result";
 #if defined(RESCPP_DISABLE_EXCEPTIONS)
     std::fprintf(
@@ -66,7 +72,7 @@ inline void throw_bad_error_access_exception() {
 #endif
 }
 
-inline void throw_bad_value_access_exception() {
+inline void throw_bad_value_access_exception() RESCPP_NOEXCEPT {
     const char* bad_value_access_exception_message = "cannot access value on a bad result";
 #if defined(RESCPP_DISABLE_EXCEPTIONS)
     std::fprintf(
@@ -227,8 +233,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type& error() const & RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr const error_type& error() const & RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
         }
@@ -238,8 +244,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type&& error() const && RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr const error_type&& error() const && RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
         }
@@ -249,8 +255,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<value_type&> value() & RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr return_value_type<value_type&> value() & RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (has_error()) {
             detail::throw_bad_value_access_exception();
         }
@@ -268,8 +274,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<const value_type&> value() const & RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr return_value_type<const value_type&> value() const & RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (has_error()) {
             detail::throw_bad_value_access_exception();
         }
@@ -287,8 +293,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<value_type&&> value() && RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr return_value_type<value_type&&> value() && RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (has_error()) {
             detail::throw_bad_value_access_exception();
         }
@@ -303,8 +309,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr return_value_type<const value_type&&> value() const && RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr return_value_type<const value_type&&> value() const && RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (has_error()) {
             detail::throw_bad_value_access_exception();
         }
@@ -316,38 +322,6 @@ public:
         else {
             return std::move(value_);
         }
-    }
-
-    // inline constexpr operator return_value_type<value_type&>() & noexcept {
-    //     return std::forward<return_value_type<value_type>>(value());
-    // }
-    //
-    // inline constexpr operator return_value_type<const value_type&>() const & noexcept {
-    //     return std::forward<return_value_type<const value_type>>(value());
-    // }
-    //
-    // inline constexpr operator return_value_type<value_type&&>() && noexcept {
-    //     return std::forward<return_value_type<value_type>>(value());
-    // }
-    //
-    // inline constexpr operator return_value_type<const value_type&&>() const && noexcept {
-    //     return std::forward<return_value_type<const value_type>>(value());
-    // }
-
-    inline constexpr return_value_type<value_type&> operator*() & RESCPP_NOEXCEPT {
-        return value();
-    }
-
-    inline constexpr return_value_type<const value_type&> operator*() const & RESCPP_NOEXCEPT {
-        return value();
-    }
-
-    inline constexpr return_value_type<value_type&&> operator*() && RESCPP_NOEXCEPT {
-        return std::forward<return_value_type<value_type>>(value());
-    }
-
-    inline constexpr return_value_type<const value_type&&> operator*() const && RESCPP_NOEXCEPT {
-        return std::forward<return_value_type<const value_type>>(value());
     }
 
     template <typename T2, typename E2>
@@ -404,8 +378,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type& error() const & RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr const error_type& error() const & RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
         }
@@ -415,8 +389,8 @@ public:
     }
 
     [[nodiscard]]
-    inline constexpr const error_type&& error() const && RESCPP_NOEXCEPT {
-#ifndef NDEBUG
+    inline constexpr const error_type&& error() const && RESCPP_CHECKS_NOEXCEPT {
+#ifndef RESCPP_DISABLE_CHECKS
         if (!has_error()) {
             detail::throw_bad_error_access_exception();
         }

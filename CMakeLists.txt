@@ -1,21 +1,28 @@
 cmake_minimum_required(VERSION 3.30)
 set(CMAKE_CXX_STANDARD 20)
 
-option(RESCPP_DISABLE_EXCEPTIONS "disables exceptions instead will call abort")
-option(RESCPP_DISABLE_TRY_MACRO "disables try macro")
-
 project(res-cpp)
 
 add_library(res-cpp INTERFACE include/res-cpp/res-cpp.hpp)
 target_precompile_headers(res-cpp INTERFACE include/res-cpp/res-cpp.hpp)
 target_include_directories(res-cpp INTERFACE include)
 
+option(RESCPP_DISABLE_EXCEPTIONS "disables exceptions instead will call abort")
 if (${RESCPP_DISABLE_EXCEPTIONS})
     target_compile_definitions(res-cpp INTERFACE
             RESCPP_DISABLE_EXCEPTIONS
     )
 endif ()
-if (${RESCPP_DISABLE_TRY_MACRO})
+
+option(RESCPP_DISABLE_CHECKS "disables result state check when calling .value() or .error() (performance, optimization)")
+if (${RESCPP_DISABLE_EXCEPTIONS})
+    target_compile_definitions(res-cpp INTERFACE
+            RESCPP_DISABLE_CHECKS
+    )
+endif ()
+
+option(RESCPP_DISABLE_TRY_MACROS "disables try macros")
+if (${RESCPP_DISABLE_TRY_MACROS})
     target_compile_definitions(res-cpp INTERFACE
             RESCPP_DISABLE_TRY_MACRO
     )
