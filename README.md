@@ -13,6 +13,7 @@ Can be defined in cmake as well just as macro when including the header directly
 
 - `RESCPP_DISABLE_EXCEPTIONS` disables exceptions instead will call abort
 - `RESCPP_DISABLE_CHECKS` disables result state check when calling `.value()` or `.error()` (performance, optimization)
+- `RESCPP_DISABLE_CHECKS_IN_RELEASE` sets 'RESCPP_DISABLE_CHECKS' in release
 - `RESCPP_DISABLE_TRY_MACROS` disables try macros
 
 # Features

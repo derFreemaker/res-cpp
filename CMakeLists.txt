@@ -14,6 +14,13 @@ if (${RESCPP_DISABLE_EXCEPTIONS})
     )
 endif ()
 
+option(RESCPP_DISABLE_CHECKS_IN_RELEASE "sets 'RESCPP_DISABLE_CHECKS' in release")
+if (${RESCPP_DISABLE_CHECKS_IN_RELEASE})
+    target_compile_definitions(res-cpp INTERFACE
+            RESCPP_DISABLE_CHECKS_IN_RELEASE
+    )
+endif ()
+
 option(RESCPP_DISABLE_CHECKS "disables result state check when calling .value() or .error() (performance, optimization)")
 if (${RESCPP_DISABLE_EXCEPTIONS})
     target_compile_definitions(res-cpp INTERFACE

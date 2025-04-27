@@ -53,6 +53,10 @@ struct bad_result_access_exception final : std::logic_error {
 #define RESCPP_NOEXCEPT
 #endif
 
+#if defined(RESCPP_DISABLE_CHECKS_IN_RELEASE) && defined(NDEBUG)
+#define RESCPP_DISABLE_CHECKS
+#endif
+
 #if defined(RESCPP_DISABLE_CHECKS) || defined(RESCPP_DISABLE_EXCEPTIONS)
 #define RESCPP_CHECKS_NOEXCEPT noexcept
 #else
