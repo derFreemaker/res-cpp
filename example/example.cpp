@@ -43,7 +43,7 @@ int main() {
     
     try {
         constexpr auto value3 = test_foo_chain(true);
-        printf("%i\n", value3.value()); // also throws rescpp::detail::bad_result_access_exception when called, but crashed with abort
+        printf("%i\n", value3.value());
     }
     catch (const std::exception& e) {
         printf("%s\n", e.what());
