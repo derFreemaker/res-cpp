@@ -19,6 +19,3 @@ target_link_libraries(res-cpp_tests
         res-cpp
 )
 
-target_compile_definitions(res-cpp INTERFACE
-        RESCPP_DISABLE_TRY_MACRO
-)
