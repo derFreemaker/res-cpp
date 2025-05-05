@@ -475,11 +475,17 @@ inline constexpr failure<E> fail(detail::pass_error_tag, const E&& error) noexce
 }
 
 namespace detail {
-template <typename E>
-inline constexpr void try_helper(result<void, E>&&) {}
+struct void_result_value {};
 
 template <typename E>
-inline constexpr void try_helper(const result<void, E>&&) {}
+inline constexpr void_result_value try_helper(result<void, E>&&) {
+    return {};
+}
+
+template <typename E>
+inline constexpr void_result_value try_helper(const result<void, E>&&) {
+    return {};
+}
 
 template <typename T, typename E>
 inline constexpr auto try_helper(result<T, E>&& res) {
@@ -528,7 +534,7 @@ inline constexpr auto try_helper(const result<T, E>&& res) {
     if (RESCPP_TRY_RESULT_NAME(name).has_error()) { \
         __VA_ARGS__ \
     } \
-    typename RESCPP_TRY_RESULT_TYPE(name)::value_type name = ::rescpp::detail::try_helper(std::move(RESCPP_TRY_RESULT_NAME(name)));
+    typename std::conditional_t<std::is_void_v<RESCPP_TRY_RESULT_TYPE(name)::value_type>, ::rescpp::detail::void_result_value, RESCPP_TRY_RESULT_TYPE(name)::value_type> name = ::rescpp::detail::try_helper(RESCPP_TRY_RESULT_NAME(name))
 
 #define RESCPP_TRY_(name, ...) \
     RESCPP_TRY_IMPL_(name, (__VA_ARGS__), \
