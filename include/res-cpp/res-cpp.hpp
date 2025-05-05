@@ -102,7 +102,7 @@ public:
         : ptr(std::addressof(ref)) {}
 
     inline constexpr ~reference_wrapper() noexcept = default;
-    
+
     inline constexpr T& get() const noexcept {
         return *ptr;
     }
@@ -126,7 +126,7 @@ public:
         : ptr(std::addressof(ref)) {}
 
     inline constexpr ~reference_wrapper() noexcept = default;
-    
+
     inline constexpr const T& get() const noexcept {
         return *ptr;
     }
@@ -478,23 +478,26 @@ namespace detail {
 struct void_result_value {};
 
 template <typename E>
-inline constexpr void_result_value try_helper(result<void, E>&&) {
-    return {};
-}
-
-template <typename E>
-inline constexpr void_result_value try_helper(const result<void, E>&&) {
+inline constexpr void_result_value try_helper(const result<void, E>) {
     return {};
 }
 
 template <typename T, typename E>
-inline constexpr auto try_helper(result<T, E>&& res) {
-    return std::forward<typename result<T, E>::template return_value_type<T&&>>(res.value());
+    requires (!std::is_reference_v<T>)
+inline constexpr auto try_helper(result<T, E> res) {
+    return std::move(res.value());
 }
 
 template <typename T, typename E>
-inline constexpr auto try_helper(const result<T, E>&& res) {
-    return std::forward<typename result<T, E>::template return_value_type<const T&&>>(res.value());
+    requires (std::is_reference_v<T> && !std::is_const_v<T>)
+inline constexpr T try_helper(result<T, E> res) {
+    return res.value();
+}
+
+template <typename T, typename E>
+    requires (std::is_reference_v<T> && std::is_const_v<T>)
+inline constexpr T try_helper(const result<T, E> res) {
+    return res.value();
 }
 }
 
@@ -504,11 +507,11 @@ inline constexpr auto try_helper(const result<T, E>&& res) {
 /// 'result_' is the used identifier for the result object.
 #define RESCPP_TRY_IMPL(expr, ...) \
     ::rescpp::detail::try_helper(({ \
-        auto&& result_ = (expr); \
+        auto result_ = (expr); \
         if (result_.has_error()) { \
             __VA_ARGS__ \
         } \
-        std::move(result_); \
+        result_; \
     }))
 
 /// WARNING: NOT 'constexpr' compatible
@@ -534,7 +537,7 @@ inline constexpr auto try_helper(const result<T, E>&& res) {
     if (RESCPP_TRY_RESULT_NAME(name).has_error()) { \
         __VA_ARGS__ \
     } \
-    typename std::conditional_t<std::is_void_v<RESCPP_TRY_RESULT_TYPE(name)::value_type>, ::rescpp::detail::void_result_value, RESCPP_TRY_RESULT_TYPE(name)::value_type> name = ::rescpp::detail::try_helper(RESCPP_TRY_RESULT_NAME(name))
+    typename std::conditional_t<std::is_void_v<RESCPP_TRY_RESULT_TYPE(name)::value_type>, ::rescpp::detail::void_result_value, RESCPP_TRY_RESULT_TYPE(name)::value_type> name = ::rescpp::detail::try_helper(std::move(RESCPP_TRY_RESULT_NAME(name)))
 
 #define RESCPP_TRY_(name, ...) \
     RESCPP_TRY_IMPL_(name, (__VA_ARGS__), \
