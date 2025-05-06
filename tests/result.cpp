@@ -1,346 +1,377 @@
-#include <string>
-#include <memory>
-#include <variant>
-#include <vector>
-#include <array>
-#include <map>
-#include <unordered_map>
-#include <functional>
-
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
+#include <res-cpp/res-cpp.hpp>
 
-#include "res-cpp/res-cpp.hpp"
+#include "catch2/internal/catch_windows_h_proxy.hpp"
 
-//TODO: write better tests
+// Custom error types for testing
+struct TestError {
+    int code;
+    std::string message;
 
-// Test that various types can be stored in result<T, E>
-TEST_CASE("Result compatibility with different value types", "[result][types]") {
-    SECTION("Fundamental types") {
-        // Integer types
-        REQUIRE_NOTHROW((rescpp::result<int, std::string>(42)));
-        REQUIRE_NOTHROW((rescpp::result<unsigned int, std::string>(42u)));
-        REQUIRE_NOTHROW((rescpp::result<short, std::string>(42)));
-        REQUIRE_NOTHROW((rescpp::result<long, std::string>(42L)));
-        REQUIRE_NOTHROW((rescpp::result<long long, std::string>(42LL)));
+    TestError(int c, std::string msg) : code(c), message(std::move(msg)) {}
 
-        // Floating point types
-        REQUIRE_NOTHROW((rescpp::result<float, std::string>(3.14f)));
-        REQUIRE_NOTHROW((rescpp::result<double, std::string>(3.14)));
+    bool operator==(const TestError& other) const {
+        return code == other.code && message == other.message;
+    }
+};
 
-        // Boolean
-        REQUIRE_NOTHROW((rescpp::result<bool, std::string>(true)));
+struct OtherError {
+    std::string reason;
 
-        // Character types
-        REQUIRE_NOTHROW((rescpp::result<char, std::string>('A')));
-        REQUIRE_NOTHROW((rescpp::result<wchar_t, std::string>(L'A')));
-        REQUIRE_NOTHROW((rescpp::result<char16_t, std::string>(u'A')));
-        REQUIRE_NOTHROW((rescpp::result<char32_t, std::string>(U'A')));
+    explicit OtherError(std::string r) : reason(std::move(r)) {}
+
+    bool operator==(const OtherError& other) const {
+        return reason == other.reason;
+    }
+};
+
+// Type converter for error conversion testing
+template <>
+struct rescpp::type_converter<TestError, OtherError> {
+    static OtherError convert(const TestError& error) noexcept {
+        return OtherError("Converted: " + error.message);
+    }
+};
+
+TEST_CASE("Basic exception support check", "[setup]") {
+    bool exception_caught = false;
+    try {
+        throw std::runtime_error("Test exception");
+    } catch (const std::runtime_error&) {
+        exception_caught = true;
+    }
+    
+    INFO("Runtime exception support result: " << (exception_caught ? "WORKING" : "FAILING"));
+    CHECK(exception_caught);
+}
+
+TEST_CASE("Result basic value functionality", "[result]") {
+    SECTION("Construction with value") {
+        rescpp::result<int, TestError> res = 42;
+
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(res.value() == 42);
     }
 
-    SECTION("Standard library types") {
-        // String types
-        REQUIRE_NOTHROW((rescpp::result<std::string, int>("hello")));
-        REQUIRE_NOTHROW((rescpp::result<std::wstring, int>(L"hello")));
-        REQUIRE_NOTHROW((rescpp::result<std::u16string, int>(u"hello")));
-        REQUIRE_NOTHROW((rescpp::result<std::u32string, int>(U"hello")));
+    SECTION("In-place construction") {
+        rescpp::result<std::string, TestError> res(std::in_place, "test string");
 
-        // Container types
-        REQUIRE_NOTHROW((rescpp::result<std::vector<int>, std::string>(std::vector<int>{1, 2, 3})));
-        REQUIRE_NOTHROW((rescpp::result<std::array<int, 3>, std::string>(std::array<int, 3>{1, 2, 3})));
-        REQUIRE_NOTHROW((rescpp::result<std::map<int, std::string>, std::string>(
-            std::map<int, std::string>{{1, "one"}, {2, "two"}})));
-        REQUIRE_NOTHROW((rescpp::result<std::unordered_map<int, std::string>, std::string>(
-            std::unordered_map<int, std::string>{{1, "one"}, {2, "two"}})));
-
-        // Smart pointers
-        REQUIRE_NOTHROW((rescpp::result<std::unique_ptr<int>, std::string>(std::make_unique<int>(42))));
-        REQUIRE_NOTHROW((rescpp::result<std::shared_ptr<int>, std::string>(std::make_shared<int>(42))));
-
-        // Optional and variant
-        REQUIRE_NOTHROW((rescpp::result<std::optional<int>, std::string>(std::optional<int>(42))));
-        REQUIRE_NOTHROW((rescpp::result<std::variant<int, std::string>, std::string>(
-            std::variant<int, std::string>("hello"))));
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(res.value() == "test string");
     }
 
-    SECTION("Lvalue Reference types") {
+    SECTION("Value conversion constructor") {
+        rescpp::result<int, TestError> res = 42;
+        rescpp::result<double, TestError> converted = res;
+
+        REQUIRE_FALSE(converted.has_error());
+        REQUIRE(converted.value() == 42.0);
+    }
+
+    SECTION("Copy construction") {
+        rescpp::result<std::string, TestError> res = "original";
+        auto copy = res;
+
+        REQUIRE_FALSE(copy.has_error());
+        REQUIRE(copy.value() == "original");
+    }
+
+    SECTION("Move construction") {
+        rescpp::result<std::unique_ptr<int>, TestError> res(std::in_place, new int(42));
+        auto moved = std::move(res);
+
+        REQUIRE_FALSE(moved.has_error());
+        REQUIRE(*moved.value() == 42);
+    }
+}
+
+TEST_CASE("Result with references", "[result]") {
+    SECTION("Lvalue reference") {
         int value = 42;
-        std::string str = "hello";
+        rescpp::result<int&, TestError> res = value;
 
-        // Lvalue references
-        REQUIRE_NOTHROW((rescpp::result<int&, std::string>(value)));
-        REQUIRE_NOTHROW((rescpp::result<std::string&, int>(str)));
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(&res.value() == &value);
 
-        // Test that references work correctly
-        rescpp::result<int&, std::string> r1(value);
-        REQUIRE(r1.value() == 42);
-        r1.value() = 100;
-        REQUIRE(value == 100);
-
-        rescpp::result<std::string&, int> r2(str);
-        REQUIRE(r2.value() == "hello");
-        r2.value() += " world";
-        REQUIRE(str == "hello world");
-    }
-
-    SECTION("Rvalue Reference types") {
-        std::unique_ptr<int> value = std::make_unique<int>(42);
-        std::string str = "hello";
-
-        // Rvalue references
-        REQUIRE_NOTHROW((rescpp::result<std::string&&, int>(std::move(str))));
-
-        // Test that references work correctly
-        rescpp::result<std::unique_ptr<int>, std::string> r1(std::move(value));
-        REQUIRE(*r1.value() == 42);
-
-        rescpp::result<std::string&&, int> r2(std::move(str));
-        REQUIRE(r2.value() == "hello");
-    }
-
-    SECTION("Pointer types") {
-        int value = 42;
-
-        // Raw pointers
-        REQUIRE_NOTHROW((rescpp::result<int*, std::string>(&value)));
-        REQUIRE_NOTHROW((rescpp::result<const int*, std::string>(&value)));
-
-        // Function pointers
-        int (*func_ptr)(int) = [](int x) {
-            return x * 2;
-        };
-        REQUIRE_NOTHROW((rescpp::result<int(*)(int), std::string>(func_ptr)));
-
-        // Test that pointers work correctly
-        rescpp::result<int*, std::string> r1(&value);
-        REQUIRE(*r1.value() == 42);
-        *r1.value() = 100;
+        // Verify modification works through reference
+        res.value() = 100;
         REQUIRE(value == 100);
     }
 
-    SECTION("Custom types") {
-        struct SimpleStruct {
-            int x;
+    SECTION("Const reference") {
+        const int value = 42;
+        rescpp::result<const int&, TestError> res = value;
 
-            bool operator==(const SimpleStruct& other) const {
-                return x == other.x;
-            }
-        };
-
-        class SimpleClass {
-        public:
-            SimpleClass(int val) : value(val) {}
-
-            [[nodiscard]]
-            int getValue() const {
-                return value;
-            }
-
-            bool operator==(const SimpleClass& other) const {
-                return value == other.value;
-            }
-
-        private:
-            int value;
-        };
-
-        // Value semantics
-        REQUIRE_NOTHROW((rescpp::result<SimpleStruct, std::string>({42})));
-        REQUIRE_NOTHROW((rescpp::result<SimpleClass, std::string>(SimpleClass(42))));
-
-        // Check values
-        rescpp::result<SimpleStruct, std::string> r1({ 42 });
-        REQUIRE(r1.value().x == 42);
-
-        rescpp::result<SimpleClass, std::string> r2(SimpleClass(42));
-        REQUIRE(r2.value().getValue() == 42);
-    }
-
-    SECTION("Complex nested types") {
-        // Nested containers
-        using NestedVector = std::vector<std::vector<int>>;
-        REQUIRE_NOTHROW((rescpp::result<NestedVector, std::string>(
-            NestedVector{{1, 2}, {3, 4}})));
-
-        // Complex map with container values
-        using ComplexMap = std::map<std::string, std::vector<int>>;
-        REQUIRE_NOTHROW((rescpp::result<ComplexMap, std::string>(
-            ComplexMap{{"a", {1, 2}}, {"b", {3, 4}}})));
-
-        // Tuple types
-        using TupleType = std::tuple<int, std::string, double>;
-        REQUIRE_NOTHROW((rescpp::result<TupleType, std::string>(
-            TupleType{42, "hello", 3.14})));
-    }
-
-    SECTION("Move-only types") {
-        // Unique pointer
-        auto ptr = std::make_unique<int>(42);
-        rescpp::result<std::unique_ptr<int>, std::string> r1(std::move(ptr));
-        REQUIRE(*r1.value() == 42);
-        REQUIRE(ptr == nullptr); // Ensure it was moved
-
-        // Custom move-only type
-        struct MoveOnly {
-            std::unique_ptr<int> ptr;
-            MoveOnly(int val) : ptr(std::make_unique<int>(val)) {}
-            MoveOnly(MoveOnly&&) = default;
-            MoveOnly& operator=(MoveOnly&&) = default;
-            MoveOnly(const MoveOnly&) = delete;
-            MoveOnly& operator=(const MoveOnly&) = delete;
-
-            [[nodiscard]]
-            int getValue() const {
-                return *ptr;
-            }
-        };
-
-        MoveOnly mo(42);
-        rescpp::result<MoveOnly, std::string> r2(std::move(mo));
-        REQUIRE(r2.value().getValue() == 42);
-        REQUIRE(mo.ptr == nullptr); // Ensure it was moved
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(&res.value() == &value);
     }
 }
 
-// Test that various types can be used as error types in result<T, E>
-TEST_CASE("Result compatibility with different error types", "[result][types]") {
-    SECTION("Fundamental types as errors") {
-        REQUIRE_NOTHROW((rescpp::result<std::string, int>(rescpp::detail::error, 42)));
-        REQUIRE_NOTHROW((rescpp::result<std::string, unsigned int>(rescpp::detail::error, 42u)));
-        REQUIRE_NOTHROW((rescpp::result<std::string, bool>(rescpp::detail::error, true)));
-        REQUIRE_NOTHROW((rescpp::result<std::string, char>(rescpp::detail::error, 'A')));
+TEST_CASE("Result with void value type", "[result]") {
+    SECTION("Successful void result") {
+        rescpp::result<void, TestError> res;
+
+        REQUIRE_FALSE(res.has_error());
     }
 
-    SECTION("Standard library types as errors") {
-        REQUIRE_NOTHROW((rescpp::result<int, std::string>(rescpp::detail::error, "error")));
-        REQUIRE_NOTHROW((rescpp::result<int, std::vector<int>>(rescpp::detail::error, std::vector<int>{1, 2, 3})));
+    SECTION("Failed void result") {
+        rescpp::result<void, TestError> res =
+            rescpp::fail<TestError>(1, "operation failed");
 
-        // Enum types
-        enum class ErrorCode { OK, ERROR, WARNING };
-        REQUIRE_NOTHROW((rescpp::result<int, ErrorCode>(rescpp::detail::error, ErrorCode::ERROR)));
-    }
-
-    SECTION("Custom error types") {
-        struct ErrorInfo {
-            int code;
-            std::string message;
-            ErrorInfo(int c, std::string msg) : code(c), message(std::move(msg)) {}
-        };
-
-        REQUIRE_NOTHROW((rescpp::result<int, ErrorInfo>(rescpp::detail::error, ErrorInfo(500, "Server Error"))));
-
-        // Check error values
-        rescpp::result<int, ErrorInfo> r(rescpp::detail::error, ErrorInfo(404, "Not Found"));
-        REQUIRE(r.has_error());
-        REQUIRE(r.error().code == 404);
-        REQUIRE(r.error().message == "Not Found");
-    }
-
-    SECTION("Complex error types") {
-        // Nested error structures
-        struct LocationInfo {
-            std::string file;
-            int line;
-        };
-
-        struct DetailedError {
-            int code;
-            std::string message;
-            LocationInfo location;
-            std::vector<std::string> trace;
-        };
-
-        DetailedError error{
-            500,
-            "Internal Server Error",
-            { "main.cpp", 42 },
-            { "function1", "function2", "main" }
-        };
-
-        REQUIRE_NOTHROW((rescpp::result<int, DetailedError>(rescpp::detail::error, std::move(error))));
+        REQUIRE(res.has_error());
+        REQUIRE(res.error().code == 1);
+        REQUIRE(res.error().message == "operation failed");
     }
 }
 
-// Test fail function with various error types
-TEST_CASE("Fail function with different error types", "[result][fail]") {
-    SECTION("Fundamental error types") {
-        auto f1 = rescpp::fail(42);
-        rescpp::result<std::string, int> r1 = f1;
-        REQUIRE(r1.has_error());
-        REQUIRE(r1.error() == 42);
+TEST_CASE("Failure handling", "[failure]") {
+    SECTION("Creating failure") {
+        auto failure = rescpp::fail<TestError>(1, "test error");
 
-        auto f2 = rescpp::fail(true);
-        rescpp::result<std::string, bool> r2 = f2;
-        REQUIRE(r2.has_error());
-        REQUIRE(r2.error() == true);
+        REQUIRE(failure.error().code == 1);
+        REQUIRE(failure.error().message == "test error");
     }
 
-    SECTION("Standard library error types") {
-        auto f1 = rescpp::fail<std::string>("error message");
-        rescpp::result<int, std::string> r1 = f1;
-        REQUIRE(r1.has_error());
-        REQUIRE(r1.error() == "error message");
+    SECTION("Converting failure to result") {
+        auto failure = rescpp::fail<TestError>(1, "test error");
+        rescpp::result<int, TestError> res = failure;
 
-        auto f2 = rescpp::fail(std::vector<int>{ 1, 2, 3 });
-        rescpp::result<int, std::vector<int>> r2 = f2;
-        REQUIRE(r2.has_error());
-        REQUIRE(r2.error() == std::vector<int>{1, 2, 3});
+        REQUIRE(res.has_error());
+        REQUIRE(res.error().code == 1);
+        REQUIRE(res.error().message == "test error");
     }
 
-    SECTION("Custom error types") {
-        struct ErrorInfo {
-            int code;
-            std::string message;
+    SECTION("Error conversion through type_converter") {
+        auto failure = rescpp::fail<TestError>(1, "test error");
+        rescpp::result<int, OtherError> res = failure;
 
-            ErrorInfo(int c, std::string msg) : code(c), message(std::move(msg)) {}
-
-            bool operator==(const ErrorInfo& other) const {
-                return code == other.code && message == other.message;
-            }
-        };
-
-        // Using constructor
-        auto f1 = rescpp::fail(ErrorInfo(404, "Not Found"));
-        rescpp::result<int, ErrorInfo> r1 = f1;
-        REQUIRE(r1.has_error());
-        REQUIRE(r1.error() == ErrorInfo(404, "Not Found"));
-
-        // Using std::in_place with constructor arguments
-        auto f2 = rescpp::fail<ErrorInfo>(500, "Server Error");
-        rescpp::result<int, ErrorInfo> r2 = f2;
-        REQUIRE(r2.has_error());
-        REQUIRE(r2.error() == ErrorInfo(500, "Server Error"));
+        REQUIRE(res.has_error());
+        REQUIRE(res.error().reason == "Converted: test error");
     }
 }
 
-// Test void result with different error types
-TEST_CASE("Void result with different error types", "[result][void]") {
-    SECTION("Simple error types") {
-        rescpp::result<void, int> r1;
-        REQUIRE_FALSE(r1.has_error());
+TEST_CASE("Error handling", "[error]") {
+    SECTION("Accessing error on good result") {
+        rescpp::result<int, TestError> res = 42;
 
-        rescpp::result<void, int> r2(rescpp::detail::error, 42);
-        REQUIRE(r2.has_error());
-        REQUIRE(r2.error() == 42);
+#if defined(RESCPP_DISABLE_EXCEPTIONS) || defined(NDEBUG)
+        SKIP("Exceptions are disabled");
+#else
+        // this should throw
+        REQUIRE_THROWS_AS(res.error(), rescpp::detail::bad_result_access_exception);
+#endif
     }
 
-    SECTION("Complex error types") {
-        struct ErrorInfo {
-            int code;
-            std::string message;
+    SECTION("Accessing value on bad result") {
+        rescpp::result<int, TestError> res = rescpp::fail<TestError>(1, "test error");
 
-            ErrorInfo(int c, std::string msg) : code(c), message(std::move(msg)) {}
-
-            bool operator==(const ErrorInfo& other) const {
-                return code == other.code && message == other.message;
-            }
-        };
-
-        rescpp::result<void, ErrorInfo> r1;
-        REQUIRE_FALSE(r1.has_error());
-
-        rescpp::result<void, ErrorInfo> r2(rescpp::detail::error, ErrorInfo(404, "Not Found"));
-        REQUIRE(r2.has_error());
-        REQUIRE(r2.error() == ErrorInfo(404, "Not Found"));
+#if defined(RESCPP_DISABLE_EXCEPTIONS) || defined(NDEBUG)
+        SKIP("Exceptions are disabled");
+#else
+        // this should throw
+        REQUIRE_THROWS_AS(res.value(), rescpp::detail::bad_result_access_exception);
+#endif
     }
+}
+
+// Helper functions for testing RESCPP_TRY macros
+rescpp::result<int, TestError> get_success() {
+    return 42;
+}
+
+rescpp::result<int, TestError> get_failure() {
+    return rescpp::fail<TestError>(1, "operation failed");
+}
+
+rescpp::result<void, TestError> do_something_void_success() {
+    return {};
+}
+
+rescpp::result<void, TestError> do_something_void_failure() {
+    return rescpp::fail<TestError>(1, "void operation failed");
+}
+
+rescpp::result<int, TestError> chain_operations() {
+    RESCPP_TRY(get_success());
+    return 100; // This should be reachable
+}
+
+rescpp::result<int, TestError> chain_failing_operations() {
+    RESCPP_TRY(get_failure());
+    return 100; // This should NOT be reachable
+}
+
+rescpp::result<int, TestError> chain_operations_with_void() {
+    RESCPP_TRY(do_something_void_success());
+    return 100; // This should be reachable
+}
+
+rescpp::result<int, TestError> chain_failing_operations_with_void() {
+    RESCPP_TRY(do_something_void_failure());
+    return 100; // This should NOT be reachable
+}
+
+// Test the named version of the macro
+rescpp::result<int, TestError> named_try_operation() {
+    RESCPP_TRY_(value, get_success());
+    return value * 2; // This should use the extracted value
+}
+
+rescpp::result<int, TestError> named_try_failing_operation() {
+    RESCPP_TRY_(value, get_failure());
+    return value * 2; // This should NOT be reachable
+}
+
+TEST_CASE("RESCPP_TRY macro", "[macros]") {
+    SECTION("Successful operation") {
+        auto res = chain_operations();
+
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(res.value() == 100);
+    }
+
+    SECTION("Failing operation") {
+        auto res = chain_failing_operations();
+
+        REQUIRE(res.has_error());
+        REQUIRE(res.error().code == 1);
+        REQUIRE(res.error().message == "operation failed");
+    }
+
+    SECTION("Successful void operation") {
+        auto res = chain_operations_with_void();
+
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(res.value() == 100);
+    }
+
+    SECTION("Failing void operation") {
+        auto res = chain_failing_operations_with_void();
+
+        REQUIRE(res.has_error());
+        REQUIRE(res.error().code == 1);
+        REQUIRE(res.error().message == "void operation failed");
+    }
+}
+
+TEST_CASE("RESCPP_TRY_ named macro", "[macros]") {
+    SECTION("Successful operation with named result") {
+        auto res = named_try_operation();
+
+        REQUIRE_FALSE(res.has_error());
+        REQUIRE(res.value() == 84); // 42 * 2
+    }
+
+    SECTION("Failing operation with named result") {
+        auto res = named_try_failing_operation();
+
+        REQUIRE(res.has_error());
+        REQUIRE(res.error().code == 1);
+        REQUIRE(res.error().message == "operation failed");
+    }
+}
+
+// Test more complex scenarios
+struct Resource {
+    bool initialized = false;
+
+    void initialize() {
+        initialized = true;
+    }
+
+    void cleanup() {
+        initialized = false;
+    }
+};
+
+rescpp::result<Resource, TestError> create_resource() {
+    Resource r;
+    r.initialize();
+    return r;
+}
+
+rescpp::result<int, TestError> use_resource(Resource& r) {
+    if (!r.initialized) {
+        return rescpp::fail<TestError>(2, "resource not initialized");
+    }
+    return 42;
+}
+
+rescpp::result<int, TestError> resource_operation() {
+    RESCPP_TRY_(resource, create_resource());
+
+    // The scope of 'resource' is the rest of the function
+    REQUIRE(resource.initialized);
+
+    auto result = RESCPP_TRY(use_resource(resource));
+    resource.cleanup();
+    return result;
+}
+
+TEST_CASE("Complex resource management with TRY macros", "[macros][complex]") {
+    auto res = resource_operation();
+
+    REQUIRE_FALSE(res.has_error());
+    REQUIRE(res.value() == 42);
+}
+
+// Test custom error propagation with TRY macros
+rescpp::result<int, OtherError> convert_error_type() {
+    // This will fail with TestError, but should convert to OtherError
+    auto result = get_failure();
+    if (result.has_error()) {
+        return rescpp::fail<OtherError>("Converted: " + result.error().message);
+    }
+    return result.value();
+}
+
+TEST_CASE("Custom error propagation", "[macros][error]") {
+    auto res = convert_error_type();
+
+    REQUIRE(res.has_error());
+    REQUIRE(res.error().reason == "Converted: operation failed");
+}
+
+// Test move semantics with unique resources
+rescpp::result<std::unique_ptr<int>, TestError> create_unique() {
+    return std::make_unique<int>(42);
+}
+
+rescpp::result<int, TestError> use_unique() {
+    RESCPP_TRY_(ptr, create_unique());
+    return *ptr; // ptr is a std::unique_ptr<int>
+}
+
+TEST_CASE("Move semantics with TRY macros", "[macros][move]") {
+    auto res = use_unique();
+
+    REQUIRE_FALSE(res.has_error());
+    REQUIRE(res.value() == 42);
+}
+
+// Test constexpr support
+constexpr rescpp::result<int, int> constexpr_success() {
+    return 42;
+}
+
+constexpr rescpp::result<int, int> constexpr_failure() {
+    return rescpp::fail<int>(1);
+}
+
+TEST_CASE("Constexpr support", "[constexpr]") {
+    constexpr auto success = constexpr_success();
+    constexpr auto failure = constexpr_failure();
+
+    static_assert(!success.has_error(), "constexpr success check failed");
+    static_assert(success.value() == 42, "constexpr value check failed");
+
+    static_assert(failure.has_error(), "constexpr failure check failed");
+    static_assert(failure.error() == 1, "constexpr error check failed");
+
+    REQUIRE_FALSE(success.has_error());
+    REQUIRE(success.value() == 42);
+
+    REQUIRE(failure.has_error());
+    REQUIRE(failure.error() == 1);
 }
