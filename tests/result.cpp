@@ -385,31 +385,34 @@ struct MoveOnlyStruct {
 
     MoveOnlyStruct(const MoveOnlyStruct&) = delete;
     MoveOnlyStruct& operator=(const MoveOnlyStruct&) = delete;
+
+    MoveOnlyStruct(MoveOnlyStruct&&) = default;
+    MoveOnlyStruct& operator=(MoveOnlyStruct&&) = default;
 };
 
 TEST_CASE("auto conversion", "[conversion]") {
     SECTION("MoveOnlyStruct") {
         SECTION("lvalue conversion") {
             SECTION("success") {
-                rescpp::result<MoveOnlyStruct, int> begin_result(MoveOnlyStruct{ 123 });
+                rescpp::result<double, int> begin_result(123);
                 REQUIRE_FALSE(begin_result.has_error());
 
-                rescpp::result<MoveOnlyStruct, MoveOnlyStruct> conversion_result = begin_result;
+                rescpp::result<double, MoveOnlyStruct> conversion_result = begin_result;
                 REQUIRE_FALSE(conversion_result.has_error());
             }
 
             SECTION("failure") {
-                rescpp::result<MoveOnlyStruct, int> begin_result = rescpp::fail(456);
+                rescpp::result<double, int> begin_result = rescpp::fail(456);
                 REQUIRE(begin_result.has_error());
 
-                rescpp::result<MoveOnlyStruct, MoveOnlyStruct> conversion_result = begin_result;
+                rescpp::result<double, MoveOnlyStruct> conversion_result = begin_result;
                 REQUIRE(conversion_result.has_error());
             }
         }
 
         SECTION("rvalue conversion") {
             SECTION("success") {
-                rescpp::result<MoveOnlyStruct, int> begin_result = std::move(MoveOnlyStruct{ 123 });
+                rescpp::result<MoveOnlyStruct, int> begin_result(MoveOnlyStruct{ 123 });
                 REQUIRE_FALSE(begin_result.has_error());
 
                 rescpp::result<MoveOnlyStruct, MoveOnlyStruct> conversion_result = std::move(begin_result);

@@ -179,25 +179,30 @@ private:
     bool has_error_;
 
 public:
-    inline constexpr result(detail::error_tag, const error_type&& error) noexcept
-        : has_error_(true) {
-        std::construct_at(&error_, std::forward<error_type>(error));
-    }
-    
+    inline constexpr result(detail::error_tag, const error_type& error) noexcept
+        : error_(error), has_error_(true) {}
+
+    inline constexpr result(detail::error_tag, error_type&& error) noexcept
+        : error_(std::move(error)), has_error_(true) {}
+
     inline constexpr result(value_type&& value) noexcept
-        : has_error_(false) {
-        std::construct_at(&value_, std::forward<value_type>(value));
-    }
+        : value_(std::move(value)), has_error_(false) {}
+
+    inline constexpr result(const value_type& value) noexcept
+        requires std::is_copy_constructible_v<value_type>
+        : value_(value), has_error_(false) {}
+
+    explicit inline constexpr result(detail::pass_value_tag, storing_type&& data) noexcept
+        : value_(std::move(data)), has_error_(false) {}
+
+    explicit inline constexpr result(detail::pass_value_tag, const storing_type& data) noexcept
+        requires std::is_copy_constructible_v<storing_type>
+        : value_(data), has_error_(false) {}
 
     template <typename... Args>
     explicit inline constexpr result(std::in_place_t, Args&&... args) noexcept
         : has_error_(false) {
         std::construct_at(&value_, std::forward<Args>(args)...);
-    }
-
-    explicit inline constexpr result(detail::pass_value_tag, storing_type&& data) noexcept
-        : has_error_(false) {
-        std::construct_at(&value_, std::forward<storing_type>(data));
     }
 
     template <typename T2>
@@ -216,10 +221,10 @@ public:
             && std::is_copy_constructible_v<error_type>)
         : has_error_(other.has_error_) {
         if (has_error_) {
-            std::construct_at(std::addressof(error_), other.error_);
+            std::construct_at(&error_, other.error_);
         }
         else {
-            std::construct_at(std::addressof(value_), other.value_);
+            std::construct_at(&value_, other.value_);
         }
     }
 
@@ -230,10 +235,10 @@ public:
             && std::is_move_constructible_v<error_type>)
         : has_error_(other.has_error_) {
         if (has_error_) {
-            std::construct_at(std::addressof(error_), std::move(other.error_));
+            std::construct_at(&error_, std::move(other.error_));
         }
         else {
-            std::construct_at(std::addressof(value_), std::move(other.value_));
+            std::construct_at(&value_, std::move(other.value_));
         }
     }
 
@@ -471,14 +476,25 @@ public:
     }
 
     template <typename T>
-    inline constexpr operator result<T, error_type>() const noexcept {
+    inline constexpr operator result<T, error_type>() const & noexcept {
+        return result<T, error_type>(detail::error, error_);
+    }
+
+    template <typename T>
+    inline constexpr operator result<T, error_type>() && noexcept {
         return result<T, error_type>(detail::error, std::move(error_));
     }
 
     template <typename T, typename E2>
         requires (!std::is_same_v<error_type, E2> && std::is_constructible_v<E2, error_type>)
-    inline constexpr operator result<T, E2>() const noexcept(std::is_nothrow_constructible_v<E2, error_type>) {
-        return result<T, E2>(detail::error, static_cast<E2>(error_));
+    inline constexpr operator result<T, E2>() const & noexcept(std::is_nothrow_constructible_v<E2, error_type>) {
+        return result<T, E2>(detail::error, E2(error_));
+    }
+
+    template <typename T, typename E2>
+        requires (!std::is_same_v<error_type, E2> && std::is_constructible_v<E2, error_type>)
+    inline constexpr operator result<T, E2>() && noexcept(std::is_nothrow_constructible_v<E2, error_type>) {
+        return result<T, E2>(detail::error, E2(std::move(error_)));
     }
 
     template <typename T, typename E2>
