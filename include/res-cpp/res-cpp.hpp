@@ -42,6 +42,10 @@ struct pass_error_tag {};
 
 inline constexpr pass_error_tag pass_error{};
 
+struct pass_value_tag {};
+
+inline constexpr pass_value_tag pass_value{};
+
 struct bad_result_access_exception final : std::logic_error {
     explicit bad_result_access_exception(const char* msg)
         : std::logic_error(msg) {}
@@ -176,21 +180,34 @@ private:
 
 public:
     inline constexpr result(detail::error_tag, const error_type&& error) noexcept
-        : error_(std::forward<const error_type>(error)), has_error_(true) {}
-
+        : has_error_(true) {
+        std::construct_at(&error_, std::forward<error_type>(error));
+    }
+    
     inline constexpr result(value_type&& value) noexcept
-        : value_(std::forward<value_type>(value)), has_error_(false) {}
+        : has_error_(false) {
+        std::construct_at(&value_, std::forward<value_type>(value));
+    }
 
     template <typename... Args>
     explicit inline constexpr result(std::in_place_t, Args&&... args) noexcept
-        : value_(std::forward<Args>(args)...), has_error_(false) {}
+        : has_error_(false) {
+        std::construct_at(&value_, std::forward<Args>(args)...);
+    }
+
+    explicit inline constexpr result(detail::pass_value_tag, storing_type&& data) noexcept
+        : has_error_(false) {
+        std::construct_at(&value_, std::forward<storing_type>(data));
+    }
 
     template <typename T2>
         requires (!std::is_same_v<value_type, T2>
             && std::is_convertible_v<T2, value_type>)
     inline constexpr result(T2&& value)
         noexcept(std::is_nothrow_convertible_v<T2, value_type>)
-        : value_(static_cast<value_type>(std::forward<T2>(value))), has_error_(false) {}
+        : has_error_(false) {
+        std::construct_at(&value_, std::forward<T2>(value));
+    }
 
     inline constexpr result(const result& other)
         noexcept(std::is_nothrow_copy_constructible_v<value_type>
@@ -329,12 +346,30 @@ public:
     }
 
     template <typename T2, typename E2>
+    inline constexpr operator result<T2, E2>() & noexcept(std::is_nothrow_convertible_v<value_type, T2>
+        && std::is_nothrow_convertible_v<error_type, E2>) {
+        if (has_error()) {
+            return failure<error_type>(error_);
+        }
+        return result<T2, E2>(detail::pass_value, value_);
+    }
+
+    template <typename T2, typename E2>
     inline constexpr operator result<T2, E2>() const & noexcept(std::is_nothrow_convertible_v<value_type, T2>
         && std::is_nothrow_convertible_v<error_type, E2>) {
         if (has_error()) {
             return failure<error_type>(error_);
         }
-        return result<T2, E2>(value_);
+        return result<T2, E2>(detail::pass_value, value_);
+    }
+
+    template <typename T2, typename E2>
+    inline constexpr operator result<T2, E2>() && noexcept(std::is_nothrow_convertible_v<value_type, T2>
+        && std::is_nothrow_convertible_v<error_type, E2>) {
+        if (has_error()) {
+            return failure<error_type>(error_);
+        }
+        return result<T2, E2>(detail::pass_value, std::move(value_));
     }
 
     template <typename T2, typename E2>
@@ -343,7 +378,7 @@ public:
         if (has_error()) {
             return failure<error_type>(error_);
         }
-        return result<T2, E2>(std::move(value_));
+        return result<T2, E2>(detail::pass_value, std::move(value_));
     }
 };
 
